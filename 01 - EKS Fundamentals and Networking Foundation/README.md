@@ -136,7 +136,9 @@ The S3 bucket will store remote Terraform state files.
 
 Example:
 
-``linuxtips-eks-state-file``
+```txt
+linuxtips-eks-state-file
+```
 
 ---
 
