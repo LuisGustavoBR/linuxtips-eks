@@ -149,11 +149,15 @@ linuxtips-eks-state-file
 - Generate Access Key
 - Configure AWS CLI:
 
-``aws configure``
+```bash
+aws configure
+```
 
 Test authentication:
 
-``aws s3 ls``
+```bash
+aws s3 ls
+```
 
 ---
 
@@ -165,11 +169,15 @@ Networking is the most critical foundation for scalable Kubernetes environments.
 
 Primary VPC CIDR:
 
-``10.0.0.0/16``
+```bash
+10.0.0.0/16
+```
 
 Secondary CIDR (Dedicated for Pods):
 
-``100.64.0.0/16``
+```bash
+100.64.0.0/16
+```
 
 ### Why CIDR Segmentation?
 
@@ -223,6 +231,37 @@ Benefits:
 
 ---
 
-## 9. Terraform Project Structure
+## 9. Public Subnets and Internet Gateway
 
-Repository structure:
+The first networking components implemented are the public subnets, which will host:
+
+- Load Balancers
+- NAT Gateways
+- Public-facing services
+
+To make the infrastructure scalable and reusable, we define the public subnets as a list of objects.
+
+---
+
+## 10. Final Architecture
+
+At the end of this module we have a fully production-ready VPC architecture.
+
+Infrastructure components created:
+
+- VPC with primary and secondary CIDR
+- Public Subnets
+- Private Subnets
+- Pod Subnets
+- Database Subnets
+- Internet Gateway
+- NAT Gateways per Availability Zone
+- Route Tables
+- Network ACL security layer
+- Parameter Store shared infrastructure values
+
+This networking foundation supports highly scalable Kubernetes workloads on Amazon EKS.
+
+In the next module we will begin the EKS Control Plane deployment.
+
+![EKS Networking](images/eks-networking.png)
