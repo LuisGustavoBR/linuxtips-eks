@@ -306,19 +306,19 @@ Now we test if everything is configured correctly.
 
 Run:
 
-```hcl
+```bash
 terraform fmt --recursive
 ```
 
 And:
 
-```hcl
+```bash
 terraform init --backend-config=environment/prod/backend.tfvars
 ```
 
 Then:
 
-```hcl
+```bash
 terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
 ```
 
@@ -393,7 +393,7 @@ data "aws_ssm_parameter" "pod_subnets" {
 
 Run Terraform again to confirm everything loads correctly:
 
-```hcl
+```bash
 terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
 ```
 
