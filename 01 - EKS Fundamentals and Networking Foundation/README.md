@@ -265,3 +265,9 @@ This networking foundation supports highly scalable Kubernetes workloads on Amaz
 In the next module we will begin the EKS Control Plane deployment.
 
 ![EKS Networking](images/eks-networking.png)
+
+## Full Code
+
+The complete implementation is available at:
+
+[LuisGustavoBR/linuxtips-eks-networking](https://github.com/LuisGustavoBR/linuxtips-eks-networking)
