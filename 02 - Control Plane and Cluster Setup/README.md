@@ -1096,3 +1096,192 @@ kubectl get pods -A
 Will show only the **system components**.
 
 ---
+
+# Module 2 — Lesson 4  
+## Managing the Cluster Security Group
+
+One important detail about EKS clusters is that **every cluster automatically creates its own Security Group**.
+
+If you open the EKS console and navigate to the **Networking section**, you will see a **security group automatically created for the cluster**.
+
+This security group is used by several components, such as:
+
+- Worker nodes
+- Fargate profiles
+- Control plane communication
+
+By default, the rules are very restrictive.  
+Initially, the security group is configured to **allow traffic only within itself**.
+
+However, we can **add additional rules** to this security group using Terraform.
+
+The idea of this lesson is to demonstrate **how to manipulate the cluster security group**.
+
+---
+
+# Step 44 — Creating a Security Group Rule
+
+We do **not need to create a new security group**.
+
+Instead, we will create **additional rules attached to the cluster security group**.
+
+Create a new file:
+
+```hcl
+sg.tf
+```
+
+Create a new resource:
+
+```hcl
+resource "aws_security_group_rule" "nodeports" {
+  cidr_blocks       = ["0.0.0.0/0"]
+  from_port         = 30000
+  to_port           = 32768
+  protocol          = "tcp"
+  description       = "Allow NodePort access to worker nodes"
+  type              = "ingress"
+  security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+}
+```
+
+This resource allows us to define **custom rules for the existing cluster security group**.
+
+---
+
+# Step 45 — Defining the Rule Type
+
+First we define the rule type.
+
+```hcl
+type = "ingress"
+```
+
+This means we are allowing **incoming traffic**.
+
+---
+
+# Step 46 — Defining the NodePort Range
+
+Kubernetes NodePort services use a specific port range.
+
+The default range is:
+
+```hcl
+30000 - 32768
+```
+
+So we define the ports:
+
+```hcl
+from_port = 30000
+to_port   = 32768
+```
+
+---
+
+# Step 47 — Defining the Protocol
+
+Now we define the protocol.
+
+```hcl
+protocol = "tcp"
+```
+
+If necessary, you could also allow all protocols using:
+
+```hcl
+protocol = "-1"
+```
+
+But in most cases using **TCP is enough**.
+
+---
+
+# Step 48 — Defining the CIDR Block
+
+Now we define who is allowed to access these ports.
+
+For demonstration purposes we will allow access from anywhere.
+
+```hcl
+cidr_blocks = ["0.0.0.0/0"]
+```
+
+In production environments this should normally be **restricted to specific networks**.
+
+---
+
+# Step 49 — Attaching the Rule to the Cluster Security Group
+
+Now we need the **security group ID of the cluster**.
+
+The EKS cluster resource exposes this information.
+
+```hcl
+security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+```
+
+The `vpc_config` attribute returns a list, and inside it we have the field:
+
+```hcl
+cluster_security_group_id
+```
+
+Using this value we attach our rule to the **cluster security group created by AWS**.
+
+---
+
+# Step 50 — Applying the Configuration
+
+Now run Terraform again.
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Terraform will create the **new rule inside the cluster security group**.
+
+You can confirm this in the AWS console.
+
+Navigate to:
+
+``  
+EKS → Cluster → Networking → Security Groups
+``
+
+Inside the security group you should now see the **NodePort rule allowing ports 30000–32768**.
+
+---
+
+# Step 51 — Example: Allowing DNS Traffic
+
+We can create additional rules in the same way.
+
+For example, allowing DNS traffic.
+
+```hcl
+resource "aws_security_group_rule" "coredns_tcp" {
+  cidr_blocks       = ["0.0.0.0/0"]
+  from_port         = 53
+  to_port           = 53
+  protocol          = "tcp"
+  description       = "Allow CoreDNS TCP access to worker nodes"
+  type              = "ingress"
+  security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+}
+
+resource "aws_security_group_rule" "coredns_udp" {
+  cidr_blocks       = ["0.0.0.0/0"]
+  from_port         = 53
+  to_port           = 53
+  protocol          = "udp"
+  description       = "Allow CoreDNS UDP access to worker nodes"
+  type              = "ingress"
+  security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+}
+```
+
+This rule allows **DNS queries**, which can be useful for services like **CoreDNS**.
+
+---
