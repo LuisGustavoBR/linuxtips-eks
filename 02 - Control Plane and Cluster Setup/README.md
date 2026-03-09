@@ -720,3 +720,379 @@ resource "aws_kms_alias" "main" {
 Now the key can easily be identified inside AWS.
 
 ---
+
+# Module 2 — Lesson 3  
+## Creating the EKS Control Plane
+
+Now we are going to create our **first real EKS resource**, which is the **EKS Cluster itself**.
+
+This resource represents the **Kubernetes control plane**.
+
+So far we have prepared everything required to reach this point:
+
+- VPC and networking
+- IAM roles
+- KMS key for encryption
+- Instance profiles
+- Subnet references
+
+Now we will finally create the **EKS control plane**.
+
+---
+
+# Step 26 — Creating the EKS Cluster Resource
+
+Create a new file:
+
+```hcl
+eks.tf
+```
+
+Inside it we define the main resource:
+
+```hcl
+resource "aws_eks_cluster" "main" {
+
+}
+```
+
+This resource represents the **Kubernetes control plane managed by AWS**.
+
+---
+
+# Step 27 — Defining the Cluster Name
+
+The cluster needs a name.
+
+```hcl
+name = var.project_name
+```
+
+Using the project name helps keep everything standardized.
+
+---
+
+# Step 28 — Creating the Kubernetes Version Variable
+
+Before continuing, let's create a new variable called:
+
+```hcl
+k8s_version  
+```
+
+Inside `variables.tf`:
+
+```hcl
+variable "k8s_version" {
+  type = string
+}
+```
+
+And inside `terraform.tfvars`:
+
+```hcl
+k8s_version = "1.34"
+```
+
+At the time this course was recorded, **Kubernetes 1.31** was the latest supported version.
+
+---
+
+# Step 29 — Setting the Kubernetes Version
+
+Back in the cluster resource:
+
+```hcl
+version = var.k8s_version
+```
+
+This defines which Kubernetes version the control plane will run.
+
+---
+
+# Step 30 — Defining the Cluster IAM Role
+
+Now we attach the **IAM role created earlier for the control plane**.
+
+```hcl
+role_arn = aws_iam_role.eks_cluster_role.arn
+```
+
+This role allows EKS to manage cluster resources.
+
+---
+
+# Step 31 — Configuring VPC Networking
+
+Now we define the **VPC configuration block**.
+
+```hcl
+vpc_config {
+
+}
+```
+
+Inside this block we define the subnets used by the control plane.
+
+The control plane will run inside the **private subnets**.
+
+```hcl
+subnet_ids = data.aws_ssm_parameter.private_subnets[*].value
+```
+
+This loads the subnet IDs from **Parameter Store**.
+
+---
+
+# Step 32 — Configuring Encryption
+
+Now we configure **encryption for Kubernetes secrets**.
+
+```hcl
+  encryption_config {
+    provider {
+      key_arn = aws_kms_key.main.arn
+    }
+    resources = ["secrets"]
+  }
+```
+
+This tells EKS to use our **KMS key to encrypt Kubernetes secrets at rest**.
+
+---
+
+# Step 33 — Access Configuration
+
+Now we configure **cluster access settings**.
+
+```hcl
+  access_config {
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+```
+
+This enables two authentication methods:
+
+- API based access (modern method)
+- aws-auth ConfigMap (legacy method)
+
+Using both allows us to **demonstrate both approaches during the course**.
+
+However, in production environments it is recommended to use **API access entries only**.
+
+---
+
+# Step 34 — Bootstrap Admin Permissions
+
+Another very important parameter is:
+
+```hcl
+bootstrap_cluster_creator_admin_permissions = true
+```
+
+This setting ensures that **the IAM identity that created the cluster automatically receives admin permissions inside Kubernetes**.
+
+This is extremely important.
+
+Sometimes Kubernetes authentication configurations can break, and you may lose access to the cluster.
+
+With this option enabled, the **cluster creator always keeps admin privileges**, which helps recover access.
+
+---
+
+# Step 35 — Enabling Control Plane Logs
+
+Now we enable **control plane logging**.
+
+```hcl
+  enabled_cluster_log_types = [
+    "api", "audit", "authenticator", "controllerManager", "scheduler"
+  ]
+```
+
+These logs will be sent to **CloudWatch Logs**.
+
+They include:
+
+- API calls
+- Audit logs
+- Authentication logs
+- Controller Manager logs
+- Scheduler logs
+
+This is extremely useful for **debugging and auditing cluster activity**.
+
+---
+
+# Step 36 — Cluster Tag
+
+It is also good practice to include the Kubernetes cluster tag.
+
+```hcl
+  tags = {
+    "kubernetes.io/cluster/${var.project_name}" = "shared"
+  }
+```
+
+This tag helps AWS services identify resources associated with the cluster.
+
+---
+
+# Step 37 — API Endpoint Security
+
+There are also security configurations related to **cluster API access**.
+
+For example:
+
+```hcl
+endpoint_private_access = false
+endpoint_public_access  = true
+```
+
+By default, the Kubernetes API is **publicly accessible**.
+
+You can also restrict access using **CIDR blocks**.
+
+Example:
+
+```hcl
+public_access_cidrs = ["0.0.0.0/0"]
+```
+
+This allows access from anywhere.
+
+However, in a production environment it is highly recommended to restrict this to **corporate IP ranges**.
+
+For example:
+
+```hcl
+public_access_cidrs = ["203.0.113.10/32"]
+```
+
+In this course we will leave it open for simplicity.
+
+---
+
+# Step 38 — Creating the OIDC Provider
+
+Before finishing the cluster setup, we also need to configure **OIDC integration**.
+
+This allows Kubernetes **Service Accounts to assume IAM roles** using Web Identity.
+
+First we retrieve the **TLS certificate from the OIDC issuer**.
+
+```hcl
+data "tls_certificate" "eks" {
+  url = aws_eks_cluster.main.identity[0].oidc[0].issuer
+}
+```
+
+This certificate will be used to configure the OIDC provider.
+
+---
+
+# Step 39 — Creating the OpenID Connect Provider
+
+Now we create the IAM OIDC provider.
+
+```hcl
+resource "aws_iam_openid_connect_provider" "eks" {
+  client_id_list = ["sts.amazonaws.com"]
+  thumbprint_list = [
+    data.tls_certificate.eks.certificates[0].sha1_fingerprint,
+    "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+  ]
+  url = flatten(concat(aws_eks_cluster.main[*].identity[*].oidc.0.issuer, [""]))[0]
+}
+```
+
+This resource allows **Kubernetes service accounts to authenticate with AWS IAM**.
+
+It is required for features like:
+
+- IAM Roles for Service Accounts (IRSA)
+- External controllers
+- AWS integrations inside Kubernetes
+
+---
+
+# Step 40 — Creating the Cluster
+
+Now we can finally run Terraform.
+
+First initialize the providers:
+
+```bash
+terraform init --backend-config=environment/prod/backend.tfvars
+```
+
+Then apply the configuration:
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Terraform will now create the **EKS control plane**.
+
+This process usually takes **several minutes**.
+
+---
+
+# Step 41 — Verifying the Cluster
+
+After Terraform finishes, you can open the **EKS console**.
+
+You should see your new cluster running.
+
+Important information available in the console includes:
+
+- Kubernetes version
+- API endpoint
+- IAM role used by the control plane
+- VPC configuration
+
+---
+
+# Step 42 — Connecting to the Cluster
+
+To connect to the cluster we need:
+
+- AWS CLI
+- kubectl installed
+
+We can generate the kubeconfig automatically using the AWS CLI.
+
+```bash
+aws eks update-kubeconfig --region us-east-1 --name linuxtips-cluster
+```
+
+This command updates your **local kubeconfig file**.
+
+It creates a new Kubernetes context for the cluster.
+
+---
+
+# Step 43 — Testing the Connection
+
+Now we can test the connection.
+
+```bash
+kubectl get nodes
+```
+
+You will see that the cluster currently has **no worker nodes**.
+
+This is expected.
+
+At this stage we only created the **control plane**.
+
+Running:
+
+```bash
+kubectl get pods -A
+```
+
+Will show only the **system components**.
+
+---
