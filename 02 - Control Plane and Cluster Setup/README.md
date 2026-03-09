@@ -405,3 +405,318 @@ If everything is correct, Terraform will successfully retrieve:
 - Pod subnet IDs
 
 Now all networking values are **available in memory for Terraform**.
+
+---
+
+# Module 2 — Lesson 2  
+## Creating IAM Roles and KMS for the EKS Cluster
+
+Now let's start creating the **IAM resources required by our EKS cluster**.
+
+The first thing we will do is create a file called:
+
+```txt
+iam_cluster.tf
+```
+
+Inside this file we will define the **IAM Role used by the EKS Control Plane**.
+
+The EKS control plane needs specific permissions in order to manage:
+
+- Kubernetes API operations  
+- Worker node communication  
+- Cluster lifecycle actions  
+
+So the first thing we do is define an **IAM policy document**.
+
+---
+
+# Step 16 — Creating the Assume Role Policy
+
+First we create a **data source** that defines the **assume role policy**.
+
+This document tells AWS **which service can assume this role**.
+
+```hcl
+data "aws_iam_policy_document" "cluster" {
+
+  version = "2012-10-17"
+
+  statement {
+    actions = [
+      "sts:AssumeRole"
+    ]
+
+    principals {
+      type = "Service"
+      identifiers = [
+        "eks.amazonaws.com"
+      ]
+    }
+  }
+}
+```
+
+This structure is very common when creating IAM roles for AWS services.
+
+The important part here is:
+
+```hcl
+sts:AssumeRole
+```
+
+And the principal:
+
+```hcl
+eks.amazonaws.com
+```
+
+This means the **EKS service itself will assume this role**.
+
+---
+
+# Step 17 — Creating the Cluster IAM Role
+
+Now we create the actual IAM role.
+
+```hcl
+resource "aws_iam_role" "eks_cluster_role" {
+  name               = format("%s-cluster-role", var.project_name)
+  assume_role_policy = data.aws_iam_policy_document.cluster.json
+}
+```
+
+At this point the role exists, but **it still has no permissions attached**.
+
+So we now attach the required AWS managed policies.
+
+---
+
+# Step 18 — Attaching the EKS Cluster Policy
+
+The first required policy is:
+
+```hcl
+AmazonEKSClusterPolicy
+```
+
+We attach it using:
+
+```hcl
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.eks_cluster_role.name
+}
+```
+
+This policy allows the EKS control plane to **manage cluster resources**.
+
+---
+
+# Step 19 — Attaching the EKS Service Policy
+
+The second required policy is:
+
+```
+AmazonEKSServicePolicy
+```
+
+```hcl
+resource "aws_iam_role_policy_attachment" "eks_service_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
+  role       = aws_iam_role.eks_cluster_role.name
+}
+```
+
+Now our **EKS control plane role is ready**.
+
+---
+
+# Step 20 — Creating the Worker Nodes IAM Role
+
+Now we create another file:
+
+```hcl
+iam_nodes.tf
+```
+
+This file will contain the **IAM role used by the worker nodes**.
+
+The structure is very similar to the cluster role.
+
+First we create the **assume role policy document**.
+
+```hcl
+data "aws_iam_policy_document" "nodes" {
+
+  version = "2012-10-17"
+
+  statement {
+    actions = [
+      "sts:AssumeRole"
+    ]
+
+    principals {
+      type = "Service"
+      identifiers = [
+        "ec2.amazonaws.com"
+      ]
+    }
+  }
+}
+```
+
+Notice that here the principal changes to:
+
+```hcl
+ec2.amazonaws.com
+```
+
+This is because **worker nodes are EC2 instances**.
+
+---
+
+# Step 21 — Creating the Nodes Role
+
+Now we create the nodes IAM role.
+
+```hcl
+resource "aws_iam_role" "eks_nodes_role" {
+  name               = format("%s-nodes-role", var.project_name)
+  assume_role_policy = data.aws_iam_policy_document.nodes.json
+}
+```
+
+Now we need to attach several policies.
+
+Worker nodes require **more permissions than the control plane role**.
+
+---
+
+# Step 22 — Attaching Required Policies to Nodes
+
+Worker nodes require several AWS managed policies.
+
+### CNI Policy
+
+Required for Kubernetes networking.
+
+```hcl
+resource "aws_iam_role_policy_attachment" "cni" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.eks_nodes_role.name
+}
+```
+
+---
+
+### Worker Node Policy
+
+Allows nodes to communicate with the control plane.
+
+```hcl
+resource "aws_iam_role_policy_attachment" "nodes" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.eks_nodes_role.name
+}
+```
+
+---
+
+### ECR Read Access
+
+Allows nodes to pull container images from ECR.
+
+```hcl
+resource "aws_iam_role_policy_attachment" "ecr" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.eks_nodes_role.name
+}
+```
+
+---
+
+### SSM Access
+
+Allows access to instances via Systems Manager.
+
+```hcl
+resource "aws_iam_role_policy_attachment" "ssm" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  role       = aws_iam_role.eks_nodes_role.name
+}
+```
+
+---
+
+### CloudWatch Agent
+
+Permissions required for logging and monitoring.
+
+```hcl
+resource "aws_iam_role_policy_attachment" "cloudwatch" {
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+  role       = aws_iam_role.eks_nodes_role.name
+}
+```
+
+Now our **nodes role has all required permissions**.
+
+---
+
+# Step 23 — Creating the Instance Profile
+
+EC2 instances cannot assume roles directly.
+
+They must use an **Instance Profile**.
+
+```hcl
+resource "aws_iam_instance_profile" "nodes_instance_profile" {
+  name = var.project_name
+  role = aws_iam_role.eks_nodes_role.name
+}
+```
+
+This profile will be used later by **worker nodes**.
+
+---
+
+# Step 24 — Creating the KMS Key
+
+We create another file:
+
+```hcl
+kms.tf
+```
+
+Now we create the **KMS key used to encrypt EKS resources at rest**.
+
+```hcl
+resource "aws_kms_key" "main" {
+  description = var.project_name
+}
+```
+
+This key will be used to **encrypt sensitive cluster data**.
+
+For example:
+
+- Kubernetes secrets  
+- Cluster state data  
+
+---
+
+# Step 25 — Creating a KMS Alias
+
+It is good practice to create an alias for easier identification.
+
+```hcl
+resource "aws_kms_alias" "main" {
+  name          = format("alias/%s", var.project_name)
+  target_key_id = aws_kms_key.main.id
+}
+```
+
+Now the key can easily be identified inside AWS.
+
+---
