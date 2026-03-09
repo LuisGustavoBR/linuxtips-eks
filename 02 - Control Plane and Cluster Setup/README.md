@@ -259,7 +259,7 @@ variable "ssm_private_subnets" {
 And finally the **pods subnets**:
 
 ```hcl
-variable "ssm_pods_subnets" {
+variable "ssm_pod_subnets" {
   type = list(string)
 }
 ```
@@ -289,7 +289,7 @@ ssm_private_subnets = [
   "/linuxtips-vpc/subnets/private/us-east-1c/linuxtips-private-1c",
 ]
 
-ssm_pods_subnets = [
+ssm_pod_subnets = [
   "/linuxtips-vpc/subnets/private/us-east-1a/linuxtips-pods-1a",
   "/linuxtips-vpc/subnets/private/us-east-1b/linuxtips-pods-1b",
   "/linuxtips-vpc/subnets/private/us-east-1c/linuxtips-pods-1c",
