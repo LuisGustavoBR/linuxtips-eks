@@ -1285,3 +1285,106 @@ resource "aws_security_group_rule" "coredns_udp" {
 This rule allows **DNS queries**, which can be useful for services like **CoreDNS**.
 
 ---
+
+# Module 2 — Lesson 5  
+## Enabling ARC Zonal Shift for the Control Plane
+
+Another extremely important feature related to the **EKS control plane** is the ability to enable **ARC Zonal Shift**.
+
+This feature is part of **AWS Application Recovery Controller (ARC)** and provides an additional mechanism for **handling Availability Zone failures**.
+
+In Kubernetes environments running across multiple AZs, it's possible that **one AZ experiences issues**, such as:
+
+- network degradation  
+- infrastructure instability  
+- partial outages  
+
+When this happens, workloads running in that AZ may become unhealthy.
+
+The **Zonal Shift feature** helps mitigate this type of problem.
+
+---
+
+# Step 52 — Understanding Zonal Shift
+
+The **Zonal Shift mechanism** allows AWS to **redirect traffic away from an unhealthy Availability Zone**.
+
+For example:
+
+If workloads are running in:
+
+```txt
+us-east-1a  
+us-east-1b  
+us-east-1c  
+```
+
+And `us-east-1b` starts experiencing problems, AWS can **shift traffic away from that AZ** and direct it to the **healthy zones**.
+
+This helps maintain **service availability even during partial infrastructure failures**.
+
+---
+
+# Step 53 — Enabling Zonal Shift in the Cluster
+
+Enabling this feature is very simple.
+
+Inside the `aws_eks_cluster` resource we add the **zonal shift configuration block**.
+
+```hcl
+  zonal_shift_config {
+    enabled = true
+  }
+```
+
+This activates **ARC Zonal Shift support for the cluster**.
+
+---
+
+# Step 54 — Why This Feature Matters
+
+Even though enabling Zonal Shift requires only a single configuration flag, it can significantly improve **cluster resilience**.
+
+With this feature enabled:
+
+- AWS can automatically react to **Availability Zone failures**
+- Traffic can be shifted to **healthy zones**
+- Workloads remain accessible during partial outages
+
+This is particularly valuable for **multi-AZ Kubernetes clusters**, which is the standard architecture for production workloads.
+
+---
+
+# Step 55 — Applying the Configuration
+
+Now apply the changes.
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Terraform will update the EKS cluster configuration.
+
+This operation is usually very fast since it is just enabling a feature flag.
+
+---
+
+# Step 56 — Verifying in the AWS Console
+
+After applying the configuration, you can confirm it inside the AWS console.
+
+Navigate to:
+
+```txt
+EKS → Cluster → Resilience
+```
+
+There you should see:
+
+```txt
+ARC Zonal Shift: Enabled
+```
+
+This means the cluster is now **capable of performing zonal traffic shifts during AZ failures**.
+
+---
