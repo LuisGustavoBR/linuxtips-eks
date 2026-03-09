@@ -1568,7 +1568,7 @@ This ensures Terraform **waits until the EKS cluster is fully created** before a
 Now we apply the configuration.
 
 ```bash
-terraform apply
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
 ```
 
 Terraform will now:
@@ -1594,5 +1594,279 @@ kubectl describe configmap aws-auth -n kube-system
 ```
 
 Inside the ConfigMap you should see the **role mapping for the worker nodes**.
+
+---
+
+# Module 2 — Lesson 7  
+## Creating the First Managed Node Group
+
+Now that our **EKS control plane is running**, we can add the **first worker nodes to the cluster**.
+
+To do that we will use **EKS Managed Node Groups**, which is the **simplest way to provision nodes in Amazon EKS**.
+
+With managed node groups, AWS handles several operational tasks automatically, such as:
+
+- AMI selection
+- node updates
+- lifecycle management
+
+This makes it the easiest way to start adding compute capacity to the cluster.
+
+Later we will explore more advanced approaches.
+
+---
+
+# Step 67 — Defining Capacity Variables
+
+Before creating the node group, we will define some variables to control **cluster capacity**.
+
+First, create a variable called **auto_scale_options**.
+
+```hcl
+variable "auto_scale_options" {
+  type = object({
+    min     = number
+    max     = number
+    desired = number
+  })
+}
+```
+
+This variable will control the **minimum**, **maximum**, and **desired** number of nodes.
+
+Next, create another variable for the instance types used by the nodes.
+
+```hcl
+variable "nodes_instance_sizes" {
+  type = list(string)
+}
+```
+
+This allows us to define **multiple instance types** for the node group.
+
+---
+
+# Step 68 — Configuring the Variables
+
+Now configure these variables inside **terraform.tfvars**.
+
+```hcl
+auto_scale_options = {
+  min     = 2
+  max     = 5
+  desired = 2
+}
+
+nodes_instance_sizes = [
+  "t3.large",
+  "t3a.large",
+]
+```
+
+This configuration will create a node group with:
+
+- minimum of **2 nodes**
+- maximum of **5 nodes**
+- **2 nodes initially running**
+
+Using multiple instance types allows AWS to select instances more flexibly.
+
+---
+
+# Step 69 — Creating the EKS Node Group Resource
+
+Create a new file:
+
+```txt
+nodes.tf
+```
+
+Now we create the node group using the **aws_eks_node_group** resource.
+
+```hcl
+resource "aws_eks_node_group" "main" {
+  cluster_name    = aws_eks_cluster.main.id
+  node_group_name = aws_eks_cluster.main.id
+
+  node_role_arn = aws_iam_role.eks_nodes_role.arn
+
+  instance_types = var.nodes_instance_sizes
+
+  subnet_ids = data.aws_ssm_parameter.private_subnets[*].value
+
+  tags = {
+    "kubernetes.io/cluster/${var.project_name}" = "owned"
+  }
+}
+```
+
+This resource connects the worker nodes to the **EKS cluster control plane**.
+
+The **node role ARN** must be the same role previously authorized in the **aws-auth ConfigMap**.
+
+---
+
+# Step 70 — Configuring Node Scaling
+
+Next we configure the **scaling configuration**.
+
+```hcl
+  scaling_config {
+    desired_size = lookup(var.auto_scale_options, "desired")
+    max_size     = lookup(var.auto_scale_options, "max")
+    min_size     = lookup(var.auto_scale_options, "min")
+  }
+```
+
+This defines how the node group scales.
+
+Terraform will initially create **two nodes**, but the cluster can scale up to **ten nodes** if necessary.
+
+---
+
+# Step 71 — Assigning Subnets
+
+The nodes must be launched inside the **private subnets used by the cluster**.
+
+```hcl
+  subnet_ids = data.aws_ssm_parameter.private_subnets[*].value
+```
+
+These are the same subnets used during the cluster creation.
+
+---
+
+# Step 72 — Adding Node Labels
+
+Node labels can be applied to every node created in the group.
+
+```hcl
+  labels = {
+    "ingress/ready" = "true"
+  }
+```
+
+Labels are extremely useful for:
+
+- scheduling workloads
+- defining node placement strategies
+- organizing cluster resources
+
+We will explore these strategies later.
+
+---
+
+# Step 73 — Preventing Scaling Drift
+
+If cluster autoscaling changes the desired size dynamically, Terraform could try to revert it.
+
+To avoid that, we configure a lifecycle rule.
+
+```hcl
+  lifecycle {
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
+```
+
+This prevents Terraform from forcing the node group back to the original desired size after autoscaling events.
+
+---
+
+# Step 74 — Ensuring Correct Dependency Order
+
+The node group must only be created **after the aws-auth ConfigMap exists**, otherwise nodes will fail to join the cluster.
+
+```hcl
+  depends_on = [
+    kubernetes_config_map_v1.aws_auth
+  ]
+```
+
+This guarantees the correct provisioning order.
+
+---
+
+# Step 75 — Configuring Timeouts
+
+For large clusters, node provisioning or updates can take time.
+
+We can define explicit timeouts.
+
+```hcl
+  timeouts {
+    create = "1h"
+    update = "2h"
+    delete = "2h"
+  }
+```
+
+This is especially useful for **large node groups or production environments**.
+
+---
+
+# Step 76 — Applying the Configuration
+
+Now apply the configuration.
+
+```bash
+terraform apply
+```
+
+Terraform will create the node group and launch the EC2 instances that will act as worker nodes.
+
+---
+
+# Step 77 — Verifying the Nodes
+
+After deployment, verify the nodes using kubectl.
+
+```bash
+kubectl get nodes
+```
+
+You should see the newly created nodes registered in the cluster.
+
+Example output:
+
+```bash
+ip-10-0-1-12.ec2.internal
+ip-10-0-2-18.ec2.internal
+```
+
+This confirms that the **nodes successfully joined the cluster**.
+
+---
+
+# Step 78 — Viewing the Node Group in AWS
+
+You can also check the node group in the AWS console.
+
+Navigate to:
+
+```txt
+EKS → Cluster → Compute → Node Groups
+```
+
+There you will see the newly created node group and its configuration.
+
+---
+
+# Step 79 — Inspecting the EC2 Instances
+
+The worker nodes are **regular EC2 instances** managed by the node group.
+
+You can view them in:
+
+```txt
+EC2 → Instances
+```
+
+Since they are running inside **private subnets**, they are not accessible through SSH from the internet.
+
+Instead, we can connect using **AWS Systems Manager (SSM)**.
+
+This allows secure access to the instances directly from the AWS console without exposing SSH ports.
 
 ---
