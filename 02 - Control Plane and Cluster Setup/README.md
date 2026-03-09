@@ -1388,3 +1388,211 @@ ARC Zonal Shift: Enabled
 This means the cluster is now **capable of performing zonal traffic shifts during AZ failures**.
 
 ---
+
+# Module 2 — Lesson 6  
+## Configuring AWS Auth (aws-auth ConfigMap) Using Terraform
+
+In this lesson we will configure the **first authentication mechanism used in Amazon EKS**.
+
+This mechanism is called **AWS Auth**, which is implemented through the **aws-auth ConfigMap** inside Kubernetes.
+
+This configuration is responsible for allowing **EC2 worker nodes to authenticate and join the cluster**.
+
+Without this configuration, worker nodes cannot successfully register with the control plane.
+
+---
+
+# Step 57 — Authentication Methods in EKS
+
+Amazon EKS supports two main authentication mechanisms for infrastructure resources:
+
+```txt
+1. aws-auth ConfigMap (AWS Auth)
+2. Access Entries
+```
+
+In this lesson we will start with **AWS Auth**, which is still widely used and important to understand.
+
+Later we will also explore **Access Entries**, which is the more modern approach for managing access to the cluster.
+
+---
+
+# Step 58 — Using the Kubernetes Terraform Provider
+
+To configure the aws-auth ConfigMap we will use the **Kubernetes provider for Terraform**.
+
+This provider allows Terraform to interact directly with the **Kubernetes API**, enabling us to apply Kubernetes resources such as:
+
+```txt
+ConfigMaps
+Secrets
+Deployments
+Services
+```
+
+This is extremely useful because it allows us to **manage Kubernetes manifests directly through Terraform**.
+
+---
+
+# Step 59 — Authenticating Terraform with the Cluster
+
+Before Terraform can apply Kubernetes manifests, it must authenticate with the Kubernetes API server.
+
+To achieve this, we must configure the **Kubernetes provider** using information from the EKS cluster.
+
+First we add a **data source** that retrieves information about the cluster.
+
+```hcl
+data "aws_eks_cluster_auth" "default" {
+  name = aws_eks_cluster.main.id
+}
+```
+
+This data source provides important information such as:
+
+- API endpoint  
+- certificate authority data  
+
+---
+
+# Step 60 — Retrieving the Authentication Token
+
+Next, we retrieve an authentication token that Terraform will use to communicate with the cluster.
+
+```hcl
+data "aws_caller_identity" "current" {}
+```
+
+This token allows Terraform to **authenticate API requests against Kubernetes**.
+
+---
+
+# Step 61 — Configuring the Kubernetes Provider
+
+Now we configure the Kubernetes provider.
+
+```hcl
+provider "kubernetes" {
+  host                   = aws_eks_cluster.main.endpoint
+  cluster_ca_certificate = base64decode(aws_eks_cluster.main.certificate_authority.0.data)
+  token                  = data.aws_eks_cluster_auth.default.token
+}
+```
+
+This configuration provides Terraform with:
+
+- the API server endpoint  
+- the cluster certificate authority  
+- an authentication token  
+
+With these parameters Terraform can successfully **connect to the Kubernetes API**.
+
+---
+
+# Step 62 — Creating the aws-auth ConfigMap
+
+Now we create a new Terraform file responsible for defining the **aws-auth ConfigMap**.
+
+Example file:
+
+```txt
+aws_auth.tf
+```
+
+Inside this file we create a Kubernetes ConfigMap resource.
+
+```hcl
+resource "kubernetes_config_map_v1" "aws_auth" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+}
+```
+
+This ConfigMap **must always be named aws-auth** and must exist in the **kube-system namespace**.
+
+---
+
+# Step 63 — Mapping the Node IAM Role
+
+Inside the ConfigMap we define role mappings that allow EC2 nodes to authenticate with the cluster.
+
+```hcl
+  data = {
+    mapRoles = <<YAML
+- rolearn: ${aws_iam_role.eks_nodes_role.arn}
+  username: system:node:{{EC2PrivateDNSName}}
+  groups:
+  - system:bootstrappers
+  - system:nodes
+  - system:node-proxier
+YAML
+  }
+```
+
+This mapping allows instances associated with the **node IAM role** to act as Kubernetes worker nodes.
+
+The groups assigned are important:
+
+```hcl
+system:bootstrappers
+system:nodes
+system:node-proxier
+```
+
+These permissions allow nodes to:
+
+- bootstrap themselves  
+- register with the cluster  
+- run kube-proxy networking functions  
+
+---
+
+# Step 64 — Ensuring Proper Deployment Order
+
+Since the cluster must exist before applying Kubernetes resources, we define an explicit dependency.
+
+```hcl
+  depends_on = [
+    aws_eks_cluster.main
+  ]
+```
+
+This ensures Terraform **waits until the EKS cluster is fully created** before applying the ConfigMap.
+
+---
+
+# Step 65 — Applying the Configuration
+
+Now we apply the configuration.
+
+```bash
+terraform apply
+```
+
+Terraform will now:
+
+1. Connect to the Kubernetes API  
+2. Create the aws-auth ConfigMap  
+3. Register the node IAM role for cluster access  
+
+---
+
+# Step 66 — Verifying the ConfigMap
+
+After the deployment we can verify the configuration using kubectl.
+
+```bash
+kubectl get cm aws-auth -n kube-system -o yaml
+```
+
+To inspect its content:
+
+```bash
+kubectl describe configmap aws-auth -n kube-system
+```
+
+Inside the ConfigMap you should see the **role mapping for the worker nodes**.
+
+---
