@@ -1870,3 +1870,368 @@ Instead, we can connect using **AWS Systems Manager (SSM)**.
 This allows secure access to the instances directly from the AWS console without exposing SSH ports.
 
 ---
+
+# Module 2 — Lesson 8  
+## Migrating from aws-auth ConfigMap to Access Entries
+
+The **aws-auth ConfigMap** has historically been the most common way to manage authentication in Amazon EKS.
+
+However, it has some limitations.
+
+The configuration is stored as a **YAML string inside a ConfigMap**, which makes it harder to manage with infrastructure-as-code tools like Terraform.
+
+Because of this, AWS introduced a new and more modern mechanism called **Access Entries**.
+
+Access Entries allow us to manage **authentication and authorization for IAM identities directly through the EKS API**, instead of manually editing the aws-auth ConfigMap.
+
+---
+
+# Step 80 — Understanding Access Entries
+
+Access Entries provide a native way to authorize:
+
+```txt
+IAM Roles
+IAM Users
+Node Roles
+Fargate Profiles
+```
+
+This method integrates directly with the **EKS API**, making it much easier to manage using Terraform.
+
+Compared to the aws-auth ConfigMap, Access Entries are:
+
+- simpler to configure
+- easier to maintain
+- fully integrated with AWS APIs
+
+---
+
+# Step 81 — Creating an Access Entry for Nodes
+
+Create a new file:
+
+```
+access_entries.tf
+```
+
+To migrate from aws-auth to Access Entries, we create an **aws_eks_access_entry** resource.
+
+```hcl
+resource "aws_eks_access_entry" "nodes" {
+  cluster_name  = aws_eks_cluster.main.id
+  principal_arn = aws_iam_role.eks_nodes_role.arn
+  type          = "EC2_LINUX"
+}
+```
+
+This resource authorizes the **node IAM role** to access the Kubernetes cluster.
+
+The **type** parameter defines what kind of identity is being authorized.
+
+Some possible values include:
+
+```hcl
+STANDARD
+EC2_LINUX
+EC2_WINDOWS
+FARGATE
+```
+
+Since our worker nodes are Linux EC2 instances, we use **EC2_LINUX**.
+
+---
+
+# Step 82 — Ensuring Correct Dependency Order
+
+We ensure the access entry is created only after the IAM role exists.
+
+```hcl
+  depends_on = [
+    # kubernetes_config_map_v1.aws_auth
+    aws_eks_access_entry.nodes
+  ]
+```
+
+This prevents Terraform from attempting to create the access entry before the role is available.
+
+---
+
+# Step 83 — Applying the Configuration
+
+Now apply the Terraform configuration.
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Terraform will create the Access Entry and register the node role with the cluster.
+
+At this point, the **EKS API now manages authentication**, instead of relying on the aws-auth ConfigMap.
+
+---
+
+# Step 84 — Removing the aws-auth ConfigMap
+
+After confirming the Access Entry is working, the old aws-auth configuration can be removed.
+
+You can verify the ConfigMap status using kubectl.
+
+```bash
+kubectl get configmap aws-auth -n kube-system
+```
+
+Once removed, the cluster will rely entirely on **Access Entries** for authentication.
+
+---
+
+# Step 85 — Verifying Access Entries in AWS
+
+You can check the new access configuration in the AWS console.
+
+Navigate to:
+
+```txt
+EKS → Cluster → Access
+```
+
+There you will see the **authorized roles and identities** managed through Access Entries.
+
+---
+
+# Step 86 — Testing the Node Authentication
+
+To confirm that Access Entries are working correctly, we can force the nodes to rejoin the cluster.
+
+For example, terminate the EC2 instances belonging to the node group.
+
+The node group will automatically recreate them.
+
+After a few minutes, check the nodes again.
+
+```bash
+kubectl get nodes
+```
+
+If the nodes successfully rejoin the cluster, the Access Entry configuration is working correctly.
+
+---
+
+# Module 2 — Lesson 9  
+## Managing EKS Add-ons with Terraform
+
+Amazon EKS provides a feature called **Add-ons**, which allows AWS to manage important Kubernetes components for the cluster.
+
+These components are considered **core infrastructure services** required for Kubernetes to function properly.
+
+Inside the **EKS console**, there is a dedicated section called **Add-ons**, where we can install and manage these components.
+
+Some common examples include:
+
+```txt
+VPC CNI
+CoreDNS
+kube-proxy
+EBS CSI Driver
+EFS CSI Driver
+Pod Identity Agent
+```
+
+These components can also be managed through **Terraform**, allowing us to keep them versioned and controlled as infrastructure code.
+
+---
+
+# Step 87 — Choosing the Core Add-ons
+
+For this lesson we will manage three essential Kubernetes add-ons:
+
+```txt
+VPC CNI
+CoreDNS
+kube-proxy
+```
+
+These are fundamental components required for the cluster to operate.
+
+- **VPC CNI** handles networking between pods and the AWS VPC.
+- **CoreDNS** provides DNS resolution inside the cluster.
+- **kube-proxy** manages service networking rules on each node.
+
+---
+
+# Step 88 — Creating Variables for Add-on Versions
+
+To manage versions through Terraform, we create variables for each add-on.
+
+```hcl
+variable "addon_cni_version" {
+  type    = string
+  default = "v1.21.1-eksbuild.3"
+}
+
+variable "addon_coredns_version" {
+  type    = string
+  default = "v1.13.2-eksbuild.1"
+}
+
+variable "addon_kubeproxy_version" {
+  type    = string
+  default = "v1.34.3-eksbuild.5"
+}
+```
+
+These variables allow us to easily upgrade or change versions when necessary.
+
+---
+
+# Step 89 — Defining Versions in terraform.tfvars
+
+Now we define the versions inside **terraform.tfvars**.
+
+Example configuration:
+
+```txt
+addon_cni_version        = "v1.21.1-eksbuild.3"
+addon_coredns_version    = "v1.13.2-eksbuild.1"
+addon_kube_proxy_version = "v1.34.3-eksbuild.5"
+```
+
+You can obtain the latest versions directly from the **EKS console** when selecting an add-on.
+
+AWS usually shows the **recommended version** for your cluster version.
+
+---
+
+# Step 90 — Creating the VPC CNI Add-on
+
+Create a new file:
+
+```
+addons.tf
+```
+
+Now we define the Terraform resource for the **VPC CNI add-on**.
+
+```hcl
+resource "aws_eks_addon" "cni" {
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "vpc-cni"
+  addon_version               = var.addon_cni_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_access_entry.nodes
+  ]
+}
+```
+
+The **resolve_conflicts** parameters ensure that Terraform overrides any conflicting configuration.
+
+---
+
+# Step 91 — Creating the CoreDNS Add-on
+
+Next we configure the **CoreDNS add-on**.
+
+```hcl
+resource "aws_eks_addon" "coredns" {
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "coredns"
+  addon_version               = var.addon_coredns_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_access_entry.nodes
+  ]
+}
+```
+
+CoreDNS is responsible for **internal DNS resolution inside the Kubernetes cluster**.
+
+---
+
+# Step 92 — Creating the kube-proxy Add-on
+
+Now we configure **kube-proxy**.
+
+```hcl
+resource "aws_eks_addon" "kubeproxy" {
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "kube-proxy"
+  addon_version               = var.addon_kubeproxy_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_access_entry.nodes
+  ]
+}
+```
+
+kube-proxy manages **network rules and service routing** on every node.
+
+---
+
+# Step 93 — Defining Dependencies
+
+We ensure the add-ons are installed **after the node group is available**.
+
+```hcl
+  depends_on = [
+    aws_eks_access_entry.nodes
+  ]
+```
+
+This ensures that the cluster already has nodes available to run these components.
+
+---
+
+# Step 94 — Applying the Configuration
+
+Now apply the Terraform configuration.
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Terraform will install the selected add-ons into the cluster.
+
+AWS will then manage their lifecycle automatically.
+
+---
+
+# Step 95 — Verifying the Add-ons
+
+You can verify the installation using kubectl.
+
+```bash
+kubectl get pods -n kube-system
+```
+
+You should see pods related to:
+
+```txt
+coredns
+kube-proxy
+aws-node
+```
+
+These components will now be running in the **kube-system namespace**.
+
+---
+
+# Step 96 — Viewing Add-ons in the AWS Console
+
+You can also verify the add-ons in the AWS console.
+
+Navigate to:
+
+```txt
+EKS → Cluster → Add-ons
+```
+
+There you will see the installed add-ons and their versions.
+
+---
