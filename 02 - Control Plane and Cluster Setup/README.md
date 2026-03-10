@@ -2235,3 +2235,517 @@ EKS → Cluster → Add-ons
 There you will see the installed add-ons and their versions.
 
 ---
+
+# Module 2 — Lesson 10  
+## Using the Helm Provider with Terraform
+
+The **Helm provider** is one of the most useful tools when managing Kubernetes clusters as **Infrastructure as Code**.
+
+Helm is the standard package manager for Kubernetes and allows us to install and manage applications using **Helm Charts**.
+
+With the **Terraform Helm provider**, we can:
+
+```txt
+helm install
+helm upgrade
+helm uninstall
+```
+
+All of this can be managed directly through Terraform.
+
+This allows us to fully automate the provisioning of a Kubernetes cluster **from infrastructure to applications**.
+
+---
+
+# Step 97 — Configuring the Helm Provider
+
+Before using Helm with Terraform, we must configure the **Helm provider**.
+
+The authentication method is the same used by the Kubernetes provider.
+
+```hcl
+provider "helm" {
+  kubernetes = {
+    host                   = aws_eks_cluster.main.endpoint
+    cluster_ca_certificate = base64decode(aws_eks_cluster.main.certificate_authority.0.data)
+    token                  = data.aws_eks_cluster_auth.default.token
+  }
+}
+```
+
+This configuration allows Terraform to authenticate with the cluster and perform Helm operations.
+
+After adding the provider, run:
+
+```bash
+terraform init --backend-config=environment/prod/backend.tfvars
+```
+
+Terraform will download the Helm provider and prepare the environment.
+
+---
+
+# Step 98 — Installing the Metrics Server
+
+One of the most common components installed in Kubernetes clusters is the **Metrics Server**.
+
+This component collects resource metrics such as:
+
+```txt
+CPU usage
+Memory usage
+Node metrics
+Pod metrics
+```
+
+These metrics are used by features like:
+
+```txt
+kubectl top
+Horizontal Pod Autoscaler (HPA)
+```
+
+Create a new file:
+
+```
+helm_metrics_server.tf
+```
+
+We can install it using the **helm_release** resource.
+
+```hcl
+resource "helm_release" "metrics_server" {
+  name       = "metrics-server"
+  repository = "https://charts.bitnami.com/bitnami"
+  chart      = "metrics-server"
+  namespace  = "kube-system"
+
+  wait = false
+
+  set = [
+    {
+      name  = "apiService.create"
+      value = "true"
+    }
+  ]
+
+  depends_on = [
+    aws_eks_cluster.main,
+    aws_eks_node_group.main
+  ]
+}
+```
+
+This configuration performs the equivalent of:
+
+```bash
+helm install metrics-server metrics-server/metrics-server
+```
+
+---
+
+# Step 99 — Applying the Configuration
+
+Now apply the Terraform configuration.
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Terraform will download the Helm chart and deploy the Metrics Server into the cluster.
+
+---
+
+# Step 100 — Verifying the Metrics Server
+
+To confirm that the deployment worked, check the pods inside the **kube-system namespace**.
+
+```bash
+kubectl get pods -n kube-system
+```
+
+You should see a deployment similar to:
+
+```bash
+metrics-server
+```
+
+This means the Metrics Server is now running in the cluster.
+
+---
+
+# Step 101 — Installing kube-state-metrics
+
+Another very common component used for monitoring is **kube-state-metrics**.
+
+This service exposes Kubernetes object metrics that can be consumed by monitoring systems such as **Prometheus**.
+
+Examples of exported metrics include:
+
+```txt
+node labels
+node annotations
+deployment status
+replica counts
+```
+
+Create a new file:
+
+```
+helm_kube_state_metrics.tf
+```
+
+We can deploy it using Helm.
+
+```hcl
+resource "helm_release" "kube_state_metrics" {
+  name             = "kube-state-metrics"
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "kube-state-metrics"
+  namespace        = "kube-system"
+  create_namespace = true
+
+  set = [
+    {
+      name  = "apiService.create"
+      value = "true"
+    },
+    {
+      name  = "metricLabelsAllowlist[0]"
+      value = "nodes=[*]"
+    },
+    {
+      name  = "metricAnnotationsAllowList[0]"
+      value = "nodes=[*]"
+    }
+  ]
+
+  depends_on = [
+    aws_eks_cluster.main,
+    aws_eks_node_group.main
+  ]
+}
+```
+
+This is equivalent to running:
+
+```bash
+helm install kube-state-metrics prometheus-community/kube-state-metrics
+```
+
+---
+
+# Step 102 — Applying the Deployment
+
+Run Terraform again.
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Terraform will install **kube-state-metrics** using Helm.
+
+---
+
+# Step 103 — Verifying the Installation
+
+You can confirm that the service is running.
+
+```bash
+kubectl get pods -n kube-system
+```
+
+You should now see pods related to:
+
+```txt
+metrics-server
+kube-state-metrics
+```
+
+These services will expose metrics that can later be scraped by monitoring systems.
+
+---
+
+# Step 104 — Why Helm Is Important
+
+Helm allows us to easily install and manage complex applications in Kubernetes.
+
+Many widely used tools are distributed as Helm charts, including:
+
+```txt
+Prometheus
+Grafana
+NGINX Ingress Controller
+Cert Manager
+ArgoCD
+```
+
+Using Terraform with Helm makes it possible to **automate the full lifecycle of these tools**.
+
+---
+
+# Module 2 — Lesson 11  
+## Deploying the First Application in the EKS Cluster
+
+Now that our **EKS cluster is fully configured**, we can deploy our **first application** inside the cluster.
+
+During the course, the Kubernetes manifests used in the labs are available in the **extra resources** section. This avoids the need to manually type large YAML manifests.
+
+In this lesson we will deploy a **simple example application called Chip**.
+
+This lab includes basic Kubernetes resources such as:
+
+```txt
+Namespace
+Deployment
+Service
+Horizontal Pod Autoscaler (HPA)
+```
+
+---
+
+# Step 105 — Creating the Application Manifest
+
+Create a file for the application deployment.
+
+Example file:
+
+```
+assets/chip-first-deploy.yaml
+```
+
+Inside this file we define all the Kubernetes resources required for the application.
+
+---
+
+# Step 106 — Creating the Namespace
+
+First we create a dedicated namespace for the application.
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chip
+```
+
+Namespaces help organize workloads and isolate resources inside the cluster.
+
+---
+
+# Step 107 — Creating the Deployment
+
+Next we create a **Deployment** that will run the application.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: chip
+  name: chip
+  namespace: chip
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chip
+  template:
+    metadata:       
+      labels:
+        app: chip
+        name: chip
+        version: v1
+    spec:
+      containers:
+      - name: chip
+        image: fidelissauro/chip:v1
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        startupProbe:
+          failureThreshold: 10
+          httpGet:
+            path: /readiness
+            port: 8080
+          periodSeconds: 10
+        livenessProbe:
+          failureThreshold: 10
+          httpGet:
+            httpHeaders:
+            - name: Custom-Header
+              value: Awesome
+            path: /liveness
+            port: 8080
+          periodSeconds: 10
+        env:
+        - name: CHAOS_MONKEY_ENABLED
+          value: "false"  
+        - name: CHAOS_MONKEY_MODE
+          value: "critical" 
+        - name: CHAOS_MONKEY_LATENCY
+          value: "true"            
+        - name: CHAOS_MONKEY_EXCEPTION
+          value: "true"   
+        - name: CHAOS_MONKEY_APP_KILLER
+          value: "true"   
+        - name: CHAOS_MONKEY_MEMORY
+          value: "true"                                        
+      terminationGracePeriodSeconds: 60
+```
+
+This deployment will create **two pods running the application**.
+
+---
+
+# Step 108 — Creating the Service
+
+Now we expose the deployment using a Kubernetes **Service**.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: chip
+  namespace: chip 
+  labels:
+    app.kubernetes.io/name: chip
+    app.kubernetes.io/instance: chip 
+spec:
+  ports:
+  - name: web
+    port: 8080
+    protocol: TCP
+  selector:
+    app: chip
+  type: ClusterIP
+```
+
+The service allows other resources in the cluster to communicate with the application.
+
+---
+
+# Step 109 — Creating the Horizontal Pod Autoscaler
+
+We also configure a simple **Horizontal Pod Autoscaler (HPA)**.
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: chip
+  namespace: chip
+spec:
+  maxReplicas: 6
+  minReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: chip
+```
+
+The HPA monitors **CPU usage** and automatically scales the deployment when necessary.
+
+---
+
+# Step 110 — Applying the Manifest
+
+Now apply the Kubernetes manifest.
+
+```bash
+kubectl apply -f chip.yaml
+```
+
+Kubernetes will create all defined resources in the cluster.
+
+---
+
+# Step 111 — Verifying the Deployment
+
+Check the pods running in the new namespace.
+
+```bash
+kubectl get pods -n chip
+```
+
+---
+
+# Step 112 — Checking the Service
+
+You can also verify the service.
+
+```bash
+kubectl get svc -n chip
+```
+
+This confirms the application is accessible inside the cluster.
+
+---
+
+# Step 113 — Checking the Autoscaler
+
+To verify the HPA configuration:
+
+```bash
+kubectl get hpa -n chip
+```
+
+The autoscaler will monitor CPU usage and scale the application between:
+
+```bash
+2 pods (minimum)
+5 pods (maximum)
+```
+
+---
+
+# Result
+
+We successfully deployed our **first application inside the EKS cluster**.
+
+The application includes:
+
+```txt
+Namespace
+Deployment with 2 replicas
+Service
+Horizontal Pod Autoscaler
+```
+
+This confirms that our cluster is fully functional and ready to run workloads.
+
+---
+
+# Conclusion of the Vanilla Cluster
+
+At this stage we built a **fully functional EKS cluster from scratch using Terraform**.
+
+The environment now includes:
+
+```txt
+EKS Control Plane
+Managed Node Group
+Access Entry Authentication
+Core Add-ons
+Helm Components
+Running Application
+```
+
+From this point forward, the course will begin exploring **more advanced Kubernetes and EKS concepts**, expanding and improving the cluster architecture.
+
+## Full Code
+
+The complete implementation is available at:
+
+[LuisGustavoBR/linuxtips-eks-vanilla](https://github.com/LuisGustavoBR/linuxtips-eks-vanilla)
