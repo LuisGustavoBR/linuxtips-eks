@@ -513,3 +513,291 @@ On-Demand nodes
 ```
 
 ---
+
+# Module 3 — Lesson 3  
+## Using Graviton (ARM64) Instances in EKS
+
+In this lesson we will learn how to use **Graviton instances (ARM64)** in our EKS cluster and how to create node groups using this architecture.
+
+---
+
+# Step 17 — Understanding What Graviton Is
+
+Graviton is a type of AWS instance that uses **ARM64 processors** instead of traditional x86 (Intel/AMD).
+
+Key difference:
+
+```txt
+x86 → Intel / AMD  
+ARM64 → AWS Graviton processors
+```
+
+Instances that support Graviton usually have a **"G" suffix** in their name.
+
+Examples:
+
+```txt
+t4g.large  
+c7g.large  
+m6g.large
+```
+
+---
+
+# Step 18 — Benefits of Using Graviton
+
+The main advantage of Graviton is **cost efficiency**.
+
+In many cases, you can get ~20% to 30% cost reduction compared to equivalent x86 instances.
+
+Important note:
+
+```txt
+Performance gains are not always significant  
+The biggest benefit is cost savings
+```
+
+---
+
+# Step 19 — Important Requirement: Application Compatibility
+
+Before using ARM64, you must ensure your applications support it.
+
+That means:
+
+```txt
+Applications may need to be compiled for ARM64  
+Docker images must support ARM architecture  
+Multi-arch images are recommended
+```
+
+If your application is not compatible, it will not run.
+
+---
+
+# Step 20 — Creating a Graviton Node Group
+
+To create a Graviton node group, we need to change two things:
+
+```txt
+Instance types (must be ARM-based)  
+AMI type (must support ARM64)
+```
+
+Example instance types:
+
+```txt
+t4g.large  
+c7g.large
+```
+
+---
+
+# Step 21 — Configuring the AMI Type
+
+We must use an ARM-compatible AMI.
+
+Example:
+
+```txt
+ami_type = "AL2023_ARM_64"
+```
+
+This ensures the node runs with the correct architecture.
+
+---
+
+# Step 22 — Creating the Terraform File
+
+We can reuse an existing node group and adapt it.
+
+Example file:
+
+```txt
+nodes_graviton.tf
+```
+
+```hcl
+resource "aws_eks_node_group" "graviton" {
+  cluster_name    = aws_eks_cluster.main.id
+  node_group_name = "${var.project_name}-workers-graviton"
+
+  node_role_arn = aws_iam_role.eks_nodes_role.arn
+
+  instance_types = [
+    "t4g.large",
+    "c7g.large",
+  ]
+
+  subnet_ids = data.aws_ssm_parameter.pod_subnets[*].value
+
+  scaling_config {
+    desired_size = lookup(var.auto_scale_options, "desired")
+    max_size     = lookup(var.auto_scale_options, "max")
+    min_size     = lookup(var.auto_scale_options, "min")
+  }
+
+  capacity_type = "ON_DEMAND"
+
+  ami_type = "AL2023_ARM_64_STANDARD"
+
+  labels = {
+    "capacity/os" = "AMAZON_LINUX"
+    "capacity/arch" = "ARM64"
+    "capacity/type" = "ON_DEMAND"
+  }
+
+  tags = {
+    "kubernetes.io/cluster/${var.project_name}" = "owned"
+  }
+
+  depends_on = [
+    # kubernetes_config_map_v1.aws_auth
+    aws_eks_access_entry.nodes
+  ]
+
+  lifecycle {
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
+
+  timeouts {
+    create = "1h"
+    update = "2h"
+    delete = "2h"
+  }
+}
+```
+
+---
+
+# Step 23 — Creating a Spot Version
+
+We can also create a Spot version of the Graviton node group.
+
+```txt
+nodes_graviton_spot.tf
+```
+
+Same configuration, just some changes:
+
+```hcl
+resource "aws_eks_node_group" "graviton_spot" {
+  cluster_name    = aws_eks_cluster.main.id
+  node_group_name = "${var.project_name}-workers-graviton"
+
+  node_role_arn = aws_iam_role.eks_nodes_role.arn
+
+  instance_types = [
+    "t4g.large",
+    "c7g.large",
+  ]
+
+  subnet_ids = data.aws_ssm_parameter.pod_subnets[*].value
+
+  scaling_config {
+    desired_size = lookup(var.auto_scale_options, "desired")
+    max_size     = lookup(var.auto_scale_options, "max")
+    min_size     = lookup(var.auto_scale_options, "min")
+  }
+
+  capacity_type = "SPOT"
+
+  ami_type = "AL2023_ARM_64_STANDARD"
+
+  labels = {
+    "capacity/os" = "AMAZON_LINUX"
+    "capacity/arch" = "ARM64"
+    "capacity/type" = "SPOT"
+  }
+
+  tags = {
+    "kubernetes.io/cluster/${var.project_name}" = "owned"
+  }
+
+  depends_on = [
+    # kubernetes_config_map_v1.aws_auth
+    aws_eks_access_entry.nodes
+  ]
+
+  lifecycle {
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
+
+  timeouts {
+    create = "1h"
+    update = "2h"
+    delete = "2h"
+  }
+}
+```
+
+Now we have:
+
+```txt
+Graviton On-Demand  
+Graviton Spot
+```
+
+---
+
+# Step 24 — Applying the Configuration
+
+Run:
+
+```bash
+terraform apply
+```
+
+After a few minutes, the new ARM64 nodes will be available in the cluster.
+
+---
+
+# Step 25 — Validating the Nodes
+
+Now we can check all nodes in the cluster.
+
+Command:
+
+```bash
+kubectl get nodes --show-labels
+```
+
+You should now see a mix of:
+
+```txt
+x86 nodes  
+ARM64 nodes  
+Amazon Linux nodes  
+Bottlerocket nodes  
+Spot nodes  
+On-Demand nodes
+```
+
+---
+
+# Step 26 — Why Labels Are Important
+
+Labels are critical to control where workloads run.
+
+They allow us to:
+
+```txt
+Separate workloads by architecture  
+Separate workloads by OS  
+Control cost strategies (Spot vs On-Demand)  
+Isolate critical applications
+```
+
+Example labels we used:
+
+```hcl
+architecture = arm64  
+os           = amazon-linux  
+capacity     = spot / on-demand
+```
+
+---
