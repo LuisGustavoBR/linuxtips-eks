@@ -642,7 +642,7 @@ resource "aws_eks_node_group" "graviton" {
   ami_type = "AL2023_ARM_64_STANDARD"
 
   labels = {
-    "capacity/os" = "AMAZON_LINUX"
+    "capacity/os"   = "AMAZON_LINUX"
     "capacity/arch" = "ARM64"
     "capacity/type" = "ON_DEMAND"
   }
@@ -707,7 +707,7 @@ resource "aws_eks_node_group" "graviton_spot" {
   ami_type = "AL2023_ARM_64_STANDARD"
 
   labels = {
-    "capacity/os" = "AMAZON_LINUX"
+    "capacity/os"   = "AMAZON_LINUX"
     "capacity/arch" = "ARM64"
     "capacity/type" = "SPOT"
   }
@@ -799,5 +799,208 @@ architecture = arm64
 os           = amazon-linux  
 capacity     = spot / on-demand
 ```
+
+---
+
+# Module 3 - Lesson 4  
+## Workload Segregation Using Node Selector
+
+In this lesson we will learn how to control **where pods run inside the cluster** using node labels and `nodeSelector`.
+
+---
+
+# Step 27 - Understanding Node Selector
+
+Node Selector allows us to **force a pod to run only on specific nodes** based on labels.
+
+Example idea:
+
+```txt
+Run only on x86 nodes  
+Avoid ARM nodes  
+Run only on On-Demand  
+Avoid Spot nodes
+```
+
+This is useful when workloads have **specific requirements**.
+
+---
+
+# Step 28 - Using the Example Deployment
+
+We reuse the previous application and add a `nodeSelector`.
+
+Create a new file `chip-node-selector.yaml`:
+
+```hcl
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chip
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: chip
+  name: chip
+  namespace: chip
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: chip
+  template:
+    metadata:       
+      labels:
+        app: chip
+        name: chip
+        version: v1
+    spec:
+      nodeSelector:
+        capacity/arch: x86_64
+        capacity/type: ON_DEMAND
+      containers:
+      - name: chip
+        image: fidelissauro/chip:v1
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        startupProbe:
+          failureThreshold: 10
+          httpGet:
+            path: /readiness
+            port: 8080
+          periodSeconds: 10
+        livenessProbe:
+          failureThreshold: 10
+          httpGet:
+            httpHeaders:
+            - name: Custom-Header
+              value: Awesome
+            path: /liveness
+            port: 8080
+          periodSeconds: 10
+        env:
+        - name: CHAOS_MONKEY_ENABLED
+          value: "false"  
+        - name: CHAOS_MONKEY_MODE
+          value: "critical" 
+        - name: CHAOS_MONKEY_LATENCY
+          value: "true"            
+        - name: CHAOS_MONKEY_EXCEPTION
+          value: "true"   
+        - name: CHAOS_MONKEY_APP_KILLER
+          value: "true"   
+        - name: CHAOS_MONKEY_MEMORY
+          value: "true"                                        
+      terminationGracePeriodSeconds: 60
+```
+
+This tells Kubernetes:
+
+```txt
+Only schedule pods on nodes that match these labels
+```
+
+---
+
+# Step 29 - Applying the Deployment
+
+Apply the manifest:
+
+```bash
+kubectl apply -f chip-node-selector.yaml
+```
+
+Then monitor:
+
+```bash
+kubectl get pods -w
+```
+
+Pods will only start on nodes that match the selector.
+
+---
+
+# Step 30 - Validating Where Pods Are Running
+
+To confirm:
+
+```bash
+kubectl get pods -n chip -o wide
+```
+
+Check the node column and verify:
+
+```txt
+Node is x86  
+Node is On-Demand  
+Node is NOT ARM  
+Node is NOT Spot
+```
+
+This proves the selector is working.
+
+---
+
+# Step 31 - Changing Strategy to Spot
+
+Now we can modify the selector:
+
+```hcl
+capacity/type: SPOT
+```
+
+Re-apply:
+
+```bash
+kubectl apply -f chip-node-selector.yaml
+```
+
+Now the same workload will run only on:
+
+```txt
+Spot nodes  
+Still respecting x86 (if defined)
+```
+
+---
+
+# Step 32 - Real Use Cases
+
+This approach is extremely powerful.
+
+Examples:
+
+- Machine Learning workloads:
+  - Run only on GPU/Neuron nodes
+
+- Critical applications:
+  - Run only on On-Demand nodes
+
+- Cost optimization:
+  - Run non-critical workloads on Spot
+
+- Architecture constraints:
+  - Force workloads to run only on x86 or ARM
+
+---
+
+# Step 33 - Combining with Node Groups
+
+Since we created multiple node groups:
+
+```txt
+x86 + ARM  
+On-Demand + Spot  
+Amazon Linux + Bottlerocket
+```
+
+We can now fully control scheduling using labels.
 
 ---
