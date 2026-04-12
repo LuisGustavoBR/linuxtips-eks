@@ -514,14 +514,14 @@ On-Demand nodes
 
 ---
 
-# Module 3 — Lesson 3  
+# Module 3 - Lesson 3  
 ## Using Graviton (ARM64) Instances in EKS
 
 In this lesson we will learn how to use **Graviton instances (ARM64)** in our EKS cluster and how to create node groups using this architecture.
 
 ---
 
-# Step 17 — Understanding What Graviton Is
+# Step 17 - Understanding What Graviton Is
 
 Graviton is a type of AWS instance that uses **ARM64 processors** instead of traditional x86 (Intel/AMD).
 
@@ -544,7 +544,7 @@ m6g.large
 
 ---
 
-# Step 18 — Benefits of Using Graviton
+# Step 18 - Benefits of Using Graviton
 
 The main advantage of Graviton is **cost efficiency**.
 
@@ -559,7 +559,7 @@ The biggest benefit is cost savings
 
 ---
 
-# Step 19 — Important Requirement: Application Compatibility
+# Step 19 - Important Requirement: Application Compatibility
 
 Before using ARM64, you must ensure your applications support it.
 
@@ -575,7 +575,7 @@ If your application is not compatible, it will not run.
 
 ---
 
-# Step 20 — Creating a Graviton Node Group
+# Step 20 - Creating a Graviton Node Group
 
 To create a Graviton node group, we need to change two things:
 
@@ -593,7 +593,7 @@ c7g.large
 
 ---
 
-# Step 21 — Configuring the AMI Type
+# Step 21 - Configuring the AMI Type
 
 We must use an ARM-compatible AMI.
 
@@ -607,7 +607,7 @@ This ensures the node runs with the correct architecture.
 
 ---
 
-# Step 22 — Creating the Terraform File
+# Step 22 - Creating the Terraform File
 
 We can reuse an existing node group and adapt it.
 
@@ -672,7 +672,7 @@ resource "aws_eks_node_group" "graviton" {
 
 ---
 
-# Step 23 — Creating a Spot Version
+# Step 23 - Creating a Spot Version
 
 We can also create a Spot version of the Graviton node group.
 
@@ -744,7 +744,7 @@ Graviton Spot
 
 ---
 
-# Step 24 — Applying the Configuration
+# Step 24 - Applying the Configuration
 
 Run:
 
@@ -756,7 +756,7 @@ After a few minutes, the new ARM64 nodes will be available in the cluster.
 
 ---
 
-# Step 25 — Validating the Nodes
+# Step 25 - Validating the Nodes
 
 Now we can check all nodes in the cluster.
 
@@ -779,7 +779,7 @@ On-Demand nodes
 
 ---
 
-# Step 26 — Why Labels Are Important
+# Step 26 - Why Labels Are Important
 
 Labels are critical to control where workloads run.
 
