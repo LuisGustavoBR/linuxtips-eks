@@ -1004,3 +1004,221 @@ Amazon Linux + Bottlerocket
 We can now fully control scheduling using labels.
 
 ---
+
+# Module 3 - Lesson 5  
+## Using Node Affinity for Smarter Scheduling
+
+In this lesson we go beyond `nodeSelector` and introduce **Node Affinity**, which allows more flexible and intelligent scheduling.
+
+---
+
+# Step 34 - Understanding Node Affinity
+
+Node Affinity is a more advanced version of node selection.
+
+Instead of forcing strict rules, it allows us to:
+
+```txt
+Define preferences  
+Suggest distribution  
+Create flexible scheduling rules
+```
+
+Key difference:
+
+```txt
+nodeSelector → strict (must match)  
+nodeAffinity → flexible (can prefer or require)
+```
+
+---
+
+# Step 35 - Creating a Node Affinity Deployment
+
+We create a new deployment using `affinity`.
+
+Inside the spec:
+
+```hcl
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chip
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: chip
+  name: chip
+  namespace: chip
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: chip
+  template:
+    metadata:       
+      labels:
+        app: chip
+        name: chip
+        version: v1
+    spec:
+      nodeSelector:
+        capacity/arch: x86_64
+
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            preference:
+              matchExpressions:
+              - key: capacity/type
+                operator: In
+                values:
+                - SPOT
+          - weight: 50 
+            preference:
+              matchExpressions:
+              - key: capacity/type
+                operator: In
+                values:
+                - ON_DEMAND
+
+      containers:
+      - name: chip
+        image: fidelissauro/chip:v1
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        startupProbe:
+          failureThreshold: 10
+          httpGet:
+            path: /readiness
+            port: 8080
+          periodSeconds: 10
+        livenessProbe:
+          failureThreshold: 10
+          httpGet:
+            httpHeaders:
+            - name: Custom-Header
+              value: Awesome
+            path: /liveness
+            port: 8080
+          periodSeconds: 10
+        env:
+        - name: CHAOS_MONKEY_ENABLED
+          value: "false"  
+        - name: CHAOS_MONKEY_MODE
+          value: "critical" 
+        - name: CHAOS_MONKEY_LATENCY
+          value: "true"            
+        - name: CHAOS_MONKEY_EXCEPTION
+          value: "true"   
+        - name: CHAOS_MONKEY_APP_KILLER
+          value: "true"   
+        - name: CHAOS_MONKEY_MEMORY
+          value: "false"                                        
+      terminationGracePeriodSeconds: 60
+```
+
+This tells Kubernetes:
+
+```
+Try to balance pods between Spot and On-Demand
+```
+
+---
+
+# Step 36 - Applying the Configuration
+
+Apply the deployment:
+
+```bash
+kubectl apply -f chip-node-affinity.yaml
+```
+
+Then monitor:
+
+```bash
+kubectl get pods -n chip -o wide
+```
+
+---
+
+# Step 37 - Observing Pod Distribution
+
+Check where pods are running:
+
+```bash
+kubectl get pods -o wide
+```
+
+Expected behavior:
+
+```txt
+~50% on Spot nodes  
+~50% on On-Demand nodes
+```
+
+Example:
+
+```txt
+Pod 1 → Spot  
+Pod 2 → On-Demand  
+Pod 3 → Spot  
+Pod 4 → On-Demand
+```
+
+---
+
+# Step 38 - Important Behavior
+
+Node Affinity with `preferredDuringSchedulingIgnoredDuringExecution` is a **soft rule**.
+
+That means:
+
+```txt
+If Spot is unavailable → pods go to On-Demand  
+If On-Demand is unavailable → pods go to Spot  
+```
+
+It does NOT block scheduling.
+
+---
+
+# Step 39 - Real Use Case
+
+This is extremely useful for cost optimization strategies:
+
+```txt
+Run part of workload on Spot (cheaper)  
+Keep fallback on On-Demand (stable)  
+Avoid downtime if Spot is unavailable
+```
+
+You can tune weights:
+
+```txt
+weight 80 → prefer Spot more  
+weight 20 → less preference for On-Demand
+```
+
+---
+
+# Step 40 - Key Takeaways
+
+- Node Affinity allows **intelligent workload distribution**
+- Works great with multiple node groups
+- Ideal for:
+  - Cost optimization
+  - High availability strategies
+  - Flexible scheduling
+
+Compared to nodeSelector, it gives much more control without being restrictive.
+
+---
