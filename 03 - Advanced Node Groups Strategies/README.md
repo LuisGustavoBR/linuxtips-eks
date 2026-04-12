@@ -749,7 +749,7 @@ Graviton Spot
 Run:
 
 ```bash
-terraform apply
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
 ```
 
 After a few minutes, the new ARM64 nodes will be available in the cluster.
@@ -832,7 +832,7 @@ We reuse the previous application and add a `nodeSelector`.
 
 Create a new file `chip-node-selector.yaml`:
 
-```hcl
+```yaml
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -952,7 +952,7 @@ This proves the selector is working.
 
 Now we can modify the selector:
 
-```hcl
+```yaml
 capacity/type: SPOT
 ```
 
@@ -1039,7 +1039,7 @@ We create a new deployment using `affinity`.
 
 Inside the spec:
 
-```hcl
+```yaml
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -1220,5 +1220,263 @@ weight 20 → less preference for On-Demand
   - Flexible scheduling
 
 Compared to nodeSelector, it gives much more control without being restrictive.
+
+---
+
+# Module 3 - Lesson 6  
+## Segregating Workloads by Criticality
+
+In this lesson we explore a practical strategy: **separating workloads based on criticality** using node labels and node groups.
+
+---
+
+# Step 41 - Defining Critical vs Non-Critical Nodes
+
+We can create different node groups based on how critical the workloads are.
+
+Example strategy:
+
+```txt
+Critical nodes → stable (On-Demand)  
+Non-critical nodes → flexible (Spot)
+```
+
+We use labels to represent this:
+
+```txt
+severity = critical  
+severity = soft
+```
+
+---
+
+# Step 42 - Creating a Critical Node Group
+
+We can reuse an existing node group (e.g., Bottlerocket) and adapt it.
+
+Create a new file:
+
+```txt
+nodes_critical.tf
+```
+
+```yaml
+resource "aws_eks_node_group" "critical" {
+  cluster_name    = aws_eks_cluster.main.id
+  node_group_name = "${var.project_name}-workers-critical"
+
+  node_role_arn = aws_iam_role.eks_nodes_role.arn
+
+  instance_types = var.nodes_instance_sizes
+
+  subnet_ids = data.aws_ssm_parameter.pod_subnets[*].value
+
+  scaling_config {
+    desired_size = lookup(var.auto_scale_options, "desired")
+    max_size     = lookup(var.auto_scale_options, "max")
+    min_size     = lookup(var.auto_scale_options, "min")
+  }
+
+  capacity_type = "ON_DEMAND"
+
+  ami_type = "BOTTLEROCKET_x86_64"
+
+  labels = {
+    "capacity/os"   = "BOTTLEROCKET"
+    "capacity/arch" = "X86_64"
+    "capacity/type" = "ON_DEMAND"
+    "severity"      = "critical"
+  }
+
+  tags = {
+    "kubernetes.io/cluster/${var.project_name}" = "owned"
+  }
+
+  depends_on = [
+    # kubernetes_config_map_v1.aws_auth
+    aws_eks_access_entry.nodes
+  ]
+
+  lifecycle {
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
+
+  timeouts {
+    create = "1h"
+    update = "2h"
+    delete = "2h"
+  }
+}
+```
+
+This node group will host:
+
+```txt
+Critical applications  
+High availability workloads  
+Production-sensitive services
+```
+
+---
+
+# Step 43 - Creating a Soft (Non-Critical) Node Group
+
+Now we create another node group for less critical workloads.
+
+Create a new file:
+
+```txt
+nodes_soft.tf
+```
+
+```yaml
+resource "aws_eks_node_group" "soft" {
+  cluster_name    = aws_eks_cluster.main.id
+  node_group_name = "${var.project_name}-workers-soft"
+
+  node_role_arn = aws_iam_role.eks_nodes_role.arn
+
+  instance_types = var.nodes_instance_sizes
+
+  subnet_ids = data.aws_ssm_parameter.pod_subnets[*].value
+
+  scaling_config {
+    desired_size = lookup(var.auto_scale_options, "desired")
+    max_size     = lookup(var.auto_scale_options, "max")
+    min_size     = lookup(var.auto_scale_options, "min")
+  }
+
+  capacity_type = "SPOT"
+
+  ami_type = "BOTTLEROCKET_x86_64"
+
+  labels = {
+    "capacity/os"   = "BOTTLEROCKET"
+    "capacity/arch" = "X86_64"
+    "capacity/type" = "SPOT"
+    "severity"      = "soft"
+  }
+
+  tags = {
+    "kubernetes.io/cluster/${var.project_name}" = "owned"
+  }
+
+  depends_on = [
+    # kubernetes_config_map_v1.aws_auth
+    aws_eks_access_entry.nodes
+  ]
+
+  lifecycle {
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
+
+  timeouts {
+    create = "1h"
+    update = "2h"
+    delete = "2h"
+  }
+}
+```
+
+This node group is ideal for:
+
+```txt
+Batch jobs  
+Test workloads  
+Non-critical services  
+Cost-optimized workloads
+```
+
+---
+
+# Step 44 - Applying the Configuration
+
+Run:
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+After provisioning, your cluster will contain nodes labeled like:
+
+```txt
+severity = critical  
+severity = soft
+```
+
+---
+
+# Step 45 - Validating Node Labels
+
+You can verify labels with:
+
+```bash
+kubectl get nodes --show-labels
+```
+
+Or filter specific labels:
+
+```bash
+kubectl get nodes -o jsonpath="{.items[*].metadata.labels.severity}"
+```
+
+---
+
+# Step 46 - Using Criticality in Deployments
+
+Now we can control where workloads run.
+
+Example:
+
+```yaml
+nodeSelector:
+  severity: critical
+```
+
+This ensures:
+
+```txt
+Only critical nodes will run this workload
+```
+
+---
+
+# Step 47 - Real Use Case
+
+This pattern is very powerful in real environments:
+
+- Critical workloads:
+  - Run only on On-Demand nodes
+  - Higher stability and SLA
+
+- Non-critical workloads:
+  - Run on Spot nodes
+  - Lower cost, higher volatility
+
+This allows:
+
+```txt
+Better cost control  
+Better reliability for critical systems  
+Efficient resource utilization
+```
+
+---
+
+# Step 48 - Key Takeaway
+
+By combining:
+
+```txt
+Multiple node groups  
+Labels  
+nodeSelector / affinity
+```
+
+You can design a cluster that intelligently separates workloads based on business needs.
 
 ---
