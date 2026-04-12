@@ -1260,7 +1260,7 @@ Create a new file:
 nodes_critical.tf
 ```
 
-```yaml
+```hcl
 resource "aws_eks_node_group" "critical" {
   cluster_name    = aws_eks_cluster.main.id
   node_group_name = "${var.project_name}-workers-critical"
@@ -1331,7 +1331,7 @@ Create a new file:
 nodes_soft.tf
 ```
 
-```yaml
+```hcl
 resource "aws_eks_node_group" "soft" {
   cluster_name    = aws_eks_cluster.main.id
   node_group_name = "${var.project_name}-workers-soft"
@@ -1478,5 +1478,290 @@ nodeSelector / affinity
 ```
 
 You can design a cluster that intelligently separates workloads based on business needs.
+
+---
+
+# Module 3 - Lesson 7  
+## Customizing Node Groups with Launch Templates
+
+In this lesson we learn how to extend Managed Node Groups using **Launch Templates** to gain more control over configuration.
+
+---
+
+# Step 48 - Why Use Launch Templates
+
+Managed Node Groups already handle most things automatically.
+
+But sometimes we need more control, such as:
+
+```txt
+Custom AMI  
+Custom user_data  
+Disk configuration (EBS)  
+Additional tags  
+Security hardening  
+```
+
+For this, we use **Launch Templates**.
+
+---
+
+# Step 49 - What We Can Customize
+
+With a Launch Template, we can define:
+
+```txt
+AMI ID  
+Instance storage (EBS size/type)  
+User data (bootstrap script)  
+Tags for instances  
+Monitoring settings  
+```
+
+This gives us much more flexibility than default node groups.
+
+---
+
+# Step 50 - Preparing User Data
+
+First, we extract the default user data from an existing instance.
+
+Then we create a file:
+
+```txt
+files/user-data/user-data.tpl
+```
+
+Inside it, we replace static values with variables:
+
+```yaml
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="//"
+
+--//
+Content-Type: application/node.eks.aws
+
+---
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  cluster:
+    apiServerEndpoint: ${KUBERNETES_ENDPOINT}
+    certificateAuthority: ${KUBERNETES_CERTIFICATE_AUTHORITY}
+    cidr: 172.20.0.0/16
+    name: ${CLUSTER_NAME}
+  kubelet:
+    config:
+      maxPods: 35
+      clusterDNS:
+      - 172.20.0.10
+
+--//--
+```
+
+This allows Terraform to dynamically inject values.
+
+---
+
+# Step 51 - Creating AMI Variable
+
+We define a variable for the custom AMI:
+
+```hcl
+variable "custom_ami" {
+  type = string
+  description = "Customized AMI ID for the nodes"
+  default = "ami-01d396130bcd204a1"
+}
+```
+
+---
+
+# Step 52 - Creating the Launch Template
+
+Create a new file:
+
+```txt
+node_custom.tf
+```
+
+Now we create the resource:
+
+```hcl
+resource "aws_launch_template" "custom" {
+  name = "${var.project_name}-custom"
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      delete_on_termination = true
+    }
+  }
+
+  ebs_optimized = true
+
+  monitoring {
+    enabled = false
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = {
+      Name = format("%s-custom", var.project_name)
+    }
+  }
+
+  user_data = base64encode(templatefile("${path.module}/files/user-data/user-data.tpl", {
+    CLUSTER_NAME                     = aws_eks_cluster.main.id
+    KUBERNETES_ENDPOINT              = aws_eks_cluster.main.endpoint
+    KUBERNETES_CERTIFICATE_AUTHORITY = aws_eks_cluster.main.certificate_authority.0.data
+  }))
+
+}
+```
+
+---
+
+# Step 53 - Passing Cluster Data to User Data
+
+We inject required values:
+
+```txt
+cluster_name  
+endpoint  
+certificate_authority  
+```
+
+These come from the EKS cluster resource.
+
+---
+
+# Step 54 - Validating the Launch Template
+
+After:
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Check in AWS:
+
+```txt
+EC2 → Launch Templates
+```
+
+Confirm:
+
+```txt
+User data is correct  
+AMI is correct  
+Settings are applied
+```
+
+---
+
+# Step 55 - Creating a Custom Node Group
+
+Now we create a new node group using the Launch Template.
+
+In the file `node_custom.tf` create:
+
+```hcl
+resource "aws_eks_node_group" "custom" {
+  cluster_name    = aws_eks_cluster.main.id
+  node_group_name = "${var.project_name}-custom"
+
+  node_role_arn = aws_iam_role.eks_nodes_role.arn
+
+  instance_types = var.nodes_instance_sizes
+
+  subnet_ids = data.aws_ssm_parameter.pod_subnets[*].value
+
+  launch_template {
+    id      = aws_launch_template.custom.id
+    version = aws_launch_template.custom.latest_version
+  }
+
+  scaling_config {
+    desired_size = lookup(var.auto_scale_options, "desired")
+    max_size     = lookup(var.auto_scale_options, "max")
+    min_size     = lookup(var.auto_scale_options, "min")
+  }
+
+  capacity_type = "ON_DEMAND"
+
+  labels = {
+    "capacity/os"   = "AMAZON_LINUX"
+    "capacity/arch" = "X86_64"
+    "capacity/type" = "ON_DEMAND"
+  }
+
+  tags = {
+    "kubernetes.io/cluster/${var.project_name}" = "owned"
+  }
+
+  depends_on = [
+    # kubernetes_config_map_v1.aws_auth
+    aws_eks_access_entry.nodes
+  ]
+
+  lifecycle {
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+  }
+
+  timeouts {
+    create = "1h"
+    update = "2h"
+    delete = "2h"
+  }
+}
+```
+
+This overrides default behavior.
+
+---
+
+# Step 56 - Applying and Validating
+
+Run:
+
+```bash
+terraform apply --auto-approve --var-file=environment/prod/terraform.tfvars
+```
+
+Then check EC2 instances:
+
+```txt
+Instances should have custom name/tags  
+Custom AMI should be used  
+Custom disk config should be applied
+```
+
+---
+
+# Step 57 - Real Use Cases
+
+Launch Templates are useful when you need:
+
+- Golden Images (company standard AMIs)
+- Pre-installed agents (security, monitoring)
+- Custom bootstrap logic
+- Advanced storage configuration
+
+---
+
+# Step 58 - Best Practice
+
+- Prefer default Managed Node Groups when possible
+- Use Launch Templates only when necessary
+- Avoid unnecessary complexity
+
+They are powerful, but increase operational overhead.
 
 ---
