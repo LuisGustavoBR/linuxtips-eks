@@ -2184,3 +2184,497 @@ Pods are gracefully moved before termination
 This is critical for production environments using Spot.
 
 ---
+
+# Module 3 - Lesson 9  
+## Node Termination Handler and Safe Workload Eviction
+
+In this lesson, we will learn how to handle infrastructure events in a Kubernetes cluster to avoid unexpected downtime. We will implement the Node Termination Handler, which captures events such as Spot interruptions or instance shutdowns and takes proactive actions like draining nodes and safely rescheduling pods. This ensures that workloads are not abruptly interrupted and improves the overall reliability and resilience of the cluster.
+
+---
+
+# Step 73 - Introduction to Node Termination Handler
+
+The Node Termination Handler is responsible for **capturing AWS infrastructure events** and reacting before nodes are terminated.
+
+It helps to:
+
+```txt
+Detect instance shutdown events
+Safely drain nodes
+Reschedule pods before termination
+```
+
+This is especially important when using **Spot instances**.
+
+---
+
+# Step 74 - How the Flow Works
+
+The solution works using AWS event integration:
+
+```txt
+AWS Event → CloudWatch Event → SQS Queue → Node Termination Handler
+```
+
+Steps:
+
+```txt
+AWS emits an event (termination, interruption, etc.)
+Event is sent to SQS
+Node Termination Handler consumes the message
+Action is executed on the node
+```
+
+---
+
+# Step 75 - Creating IAM Role (IRSA)
+
+Just like Cluster Autoscaler, we need an IAM Role.
+
+Create a new file:
+
+```txt
+iam_node_termination_handler.tf
+```
+
+```hcl
+data "aws_iam_policy_document" "node_termination_handler" {
+  statement {
+    actions = [
+      "sts:AssumeRoleWithWebIdentity"
+    ]
+
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+  }
+}
+
+resource "aws_iam_role" "node_termination_handler" {
+  name               = format("%s-node-termination-handler", var.project_name)
+  assume_role_policy = data.aws_iam_policy_document.node_termination_handler.json
+}
+
+resource "aws_iam_role" "node_termination" {
+  assume_role_policy = data.aws_iam_policy_document.node_termination.json
+  name               = format("%s-node-termination-handler", var.project_name)
+}
+
+data "aws_iam_policy_document" "aws_node_termination_handler_policy" {
+  version = "2012-10-17"
+
+  statement {
+
+    effect = "Allow"
+    actions = [
+      "autoscaling:CompleteLifecycleAction",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeInstances",
+      "sqs:DeleteMessage",
+      "sqs:ReceiveMessage"
+    ]
+
+    resources = [
+      "*"
+    ]
+
+  }
+}
+
+resource "aws_iam_policy" "node_termination_handler" {
+  name   = format("%s-node-termination-handler", var.project_name)
+  policy = data.aws_iam_policy_document.aws_node_termination_handler_policy.json
+}
+
+resource "aws_iam_role_policy_attachment" "node_termination_handler" {
+  role       = aws_iam_role.node_termination_handler.name
+  policy_arn = aws_iam_policy.node_termination_handler.arn
+}
+```
+
+This allows the handler to interact with AWS services securely.
+
+---
+
+# Step 76 - Creating IAM Policy
+
+The Node Termination Handler needs permissions such as:
+
+```hcl
+"autoscaling:CompleteLifecycleAction",
+"autoscaling:DescribeAutoScalingInstances",
+"autoscaling:DescribeTags",
+"ec2:DescribeInstances",
+"sqs:DeleteMessage",
+"sqs:ReceiveMessage"
+```
+
+This enables it to:
+
+```txt
+Read instance state
+Consume messages from SQS
+Act based on events
+```
+
+---
+
+# Step 77 - Attaching Policy to Role
+
+Attach the policy to the IAM Role:
+
+```hcl
+resource "aws_iam_role_policy_attachment" "node_termination_handler" {
+  role       = aws_iam_role.node_termination_handler.name
+  policy_arn = aws_iam_policy.node_termination_handler.arn
+}
+```
+
+Now the handler has:
+
+```txt
+Authentication (IRSA)
+Permissions (IAM Policy)
+```
+
+---
+
+# Step 78 - Creating SQS Queue
+
+We create an SQS queue to receive AWS events.
+
+Purpose:
+
+```txt
+Central place to store infrastructure events
+Decouple AWS events from Kubernetes actions
+```
+
+This queue will be consumed by the handler.
+
+Create a new file `sqs_node_termination_handler.tf`:
+
+```hcl
+resource "aws_sqs_queue" "node_termination" {
+  name                       = format("%s-node-termination", var.project_name)
+  delay_seconds              = 0
+  message_retention_seconds  = 86400
+  receive_wait_time_seconds  = 10
+  visibility_timeout_seconds = 60
+}
+
+resource "aws_sqs_queue_policy" "node_termination_handler" {
+  queue_url = aws_sqs_queue.node_termination.id
+  policy    = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": [
+        "sqs:SendMessage"
+      ],
+      "Resource": [
+        "${aws_sqs_queue.node_termination.arn}"
+      ]
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_cloudwatch_event_rule" "node_termination_handler_instance_terminate" {
+
+  name        = format("%s-instance-terminate", var.project_name)
+  description = var.project_name
+
+  event_pattern = jsonencode({
+    source = ["aws.autoscaling"]
+    detail-type = [
+      "EC2 Instance-terminate Lifecycle Action"
+    ]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "node_termination_handler_instance_terminate" {
+
+  rule      = aws_cloudwatch_event_rule.node_termination_handler_instance_terminate.name
+  target_id = "SendToSQS"
+  arn       = aws_sqs_queue.node_termination.arn
+}
+
+resource "aws_cloudwatch_event_rule" "node_termination_handler_scheduled_change" {
+
+  name        = format("%s-scheduled-change", var.project_name)
+  description = var.project_name
+
+  event_pattern = jsonencode({
+    source = ["aws.health"]
+    detail-type = [
+      "AWS Health Event"
+    ]
+    detail = {
+      service = [
+        "EC2"
+      ]
+      eventTypeCategory = [
+        "scheduledChange"
+      ]
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "node_termination_handler_scheduled_change" {
+
+  rule      = aws_cloudwatch_event_rule.node_termination_handler_scheduled_change.name
+  target_id = "SendToSQS"
+  arn       = aws_sqs_queue.node_termination.arn
+}
+
+resource "aws_cloudwatch_event_rule" "node_termination_handler_spot_termination" {
+
+  name        = format("%s-spot-termination", var.project_name)
+  description = var.project_name
+
+  event_pattern = jsonencode({
+    source = ["aws.ec2"]
+    detail-type = [
+      "EC2 Spot Instance Interruption Warning"
+    ]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "node_termination_handler_spot_termination" {
+
+  rule      = aws_cloudwatch_event_rule.node_termination_handler_spot_termination.name
+  target_id = "SendToSQS"
+  arn       = aws_sqs_queue.node_termination.arn
+}
+
+resource "aws_cloudwatch_event_rule" "node_termination_handler_rebalance" {
+
+  name        = format("%s-rebalance", var.project_name)
+  description = var.project_name
+
+  event_pattern = jsonencode({
+    source = ["aws.ec2"]
+    detail-type = [
+      "EC2 Instance Rebalance Recommendation"
+    ]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "node_termination_handler_rebalance" {
+
+  rule      = aws_cloudwatch_event_rule.node_termination_handler_rebalance.name
+  target_id = "SendToSQS"
+  arn       = aws_sqs_queue.node_termination.arn
+}
+
+resource "aws_cloudwatch_event_rule" "node_termination_handler_state_change" {
+
+  name        = format("%s-state-change", var.project_name)
+  description = var.project_name
+
+  event_pattern = jsonencode({
+    source = ["aws.ec2"]
+    detail-type = [
+      "EC2 Instance State-change Notification"
+    ]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "node_termination_handler_state_change" {
+
+  rule      = aws_cloudwatch_event_rule.node_termination_handler_state_change.name
+  target_id = "SendToSQS"
+  arn       = aws_sqs_queue.node_termination.arn
+}
+```
+
+---
+
+# Step 79 - Creating CloudWatch Event Rules
+
+We configure multiple event rules to capture different scenarios:
+
+```txt
+Instance termination (Auto Scaling)
+Spot interruption warnings
+Scheduled maintenance events
+Rebalance recommendations
+Instance state changes
+```
+
+All events are sent to:
+
+```txt
+SQS Queue
+```
+
+---
+
+# Step 80 - Testing Event Flow (Before Deployment)
+
+Before deploying the handler, we can validate the pipeline.
+
+Example:
+
+```txt
+Terminate an EC2 instance manually
+```
+
+Then check SQS:
+
+```txt
+Messages will appear in the queue
+```
+
+This confirms:
+
+```txt
+Events are being captured correctly
+```
+
+---
+
+# Step 81 - Deploying Node Termination Handler (Helm)
+
+Now we deploy using Helm.
+
+Key configurations:
+
+```txt
+Namespace: kube-system
+ServiceAccount annotation with IAM Role ARN
+SQS Queue URL
+```
+
+Create a new file:
+
+```txt
+helm_node_termination_handler.tf
+```
+
+```hcl
+resource "helm_release" "node_termination_handler" {
+  name      = "aws-node-termination-handler"
+  namespace = "kube-system"
+
+  chart      = "aws-node-termination-handler"
+  repository = "https://aws.github.io/eks-charts/"
+
+  values = yamlencode({
+    serviceAccount = {
+      annotations = {
+        "eks.amazonaws.com/role-arn" = aws_iam_role.node_termination_handler.arn
+      }
+    }
+    awsRegion                      = var.region
+    queueURL                       = aws_sqs_queue.node_termination.url
+    enableSqsTerminationDraining   = true
+    enableSpotInterruptionDraining = true
+    enableRebalanceMonitoring      = true
+    enableRebalanceDraining        = true
+    enableScheduledEventDraining   = true
+    deleteSqsMsgIfNodeNotFound     = true
+    checkTagBeforeDraining         = false
+  })
+}
+```
+
+---
+
+# Step 82 - Validating Deployment
+
+Check if the pod is running:
+
+```bash
+kubectl get pods -n kube-system
+```
+
+---
+
+# Step 83 - Verifying Event Consumption
+
+After deployment:
+
+```txt
+SQS queue should start draining (messages disappear)
+```
+
+Meaning:
+
+```txt
+Handler is consuming and processing events
+```
+
+---
+
+# Step 84 - Testing Node Termination
+
+Now test in practice.
+
+Terminate an instance:
+
+```txt
+EC2 → Terminate instance
+```
+
+Expected behavior:
+
+```txt
+Node is cordoned (no new pods)
+Node is drained (pods evicted)
+Pods are rescheduled on other nodes
+```
+
+---
+
+# Step 85 - Observing Kubernetes Behavior
+
+You can verify with:
+
+```txt
+kubectl get nodes
+kubectl get pods -o wide
+```
+
+You will see:
+
+```txt
+Node marked as SchedulingDisabled
+Pods moving to other nodes
+```
+
+---
+
+# Step 86 - Why This Matters
+
+Without Node Termination Handler:
+
+```txt
+Pods are killed abruptly
+Possible downtime
+```
+
+With it:
+
+```txt
+Graceful shutdown
+Safer rescheduling
+Higher availability
+```
+
+This is essential for:
+
+```txt
+Spot workloads
+Dynamic clusters
+Production environments
+```
