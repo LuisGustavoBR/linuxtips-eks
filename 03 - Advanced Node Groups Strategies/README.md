@@ -1765,3 +1765,422 @@ Launch Templates are useful when you need:
 They are powerful, but increase operational overhead.
 
 ---
+
+# Step 34 - Introduction to Cluster Autoscaler
+
+Now that we already know how to create multiple node groups, we need a way to **automatically scale cluster capacity**.
+
+The Cluster Autoscaler is responsible for:
+
+``
+Add nodes when pods are pending (no capacity)
+Remove nodes when they are underutilized
+``
+
+It works directly with node groups and their Auto Scaling Groups.
+
+---
+
+# Module 3 - Lesson 8  
+## Cluster Autoscaler and Dynamic Capacity Management
+
+In this lesson, we will explore how to make our Kubernetes cluster dynamically scalable using the Cluster Autoscaler. Instead of manually managing capacity, we will enable the cluster to automatically add or remove nodes based on workload demand. We will also cover how to securely grant permissions using IAM (IRSA), deploy the Autoscaler using Helm, and understand how it reacts to real scenarios like sudden traffic spikes. Finally, we introduce the Node Termination Handler, which ensures workloads are safely handled during instance interruptions, especially when using Spot instances.
+
+---
+
+# Step 59 - Introduction to Cluster Autoscaler
+
+Now that we already know how to create multiple node groups, we need a way to **automatically scale cluster capacity**.
+
+The Cluster Autoscaler is responsible for:
+
+```txt
+Add nodes when pods are pending (no capacity)
+Remove nodes when they are underutilized
+```
+
+It works directly with node groups and their Auto Scaling Groups.
+
+---
+
+# Step 60 - Creating IAM Role for Autoscaler (IRSA)
+
+To allow the Autoscaler to interact with AWS, we must create an IAM Role using IRSA (OIDC).
+
+Key idea:
+
+```txt
+Pods assume an IAM Role via OIDC (Web Identity)
+```
+
+Main configuration, create a new file `iam_cluster_autoscaler.tf` (full file):
+
+```hcl
+data "aws_iam_policy_document" "autoscaler" {
+  statement {
+    actions = [
+      "sts:AssumeRoleWithWebIdentity"
+    ]
+
+    effect = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+  }
+}
+
+resource "aws_iam_role" "autoscaler" {
+  name               = format("%s-autoscaler", var.project_name)
+  assume_role_policy = data.aws_iam_policy_document.autoscaler.json
+}
+
+data "aws_iam_policy_document" "autoscaler_policy" {
+  version = "2012-10-17"
+
+  statement {
+
+    effect = "Allow"
+    actions = [
+      "autoscaling-plans:DescribeScalingPlans",
+      "autoscaling-plans:GetScalingPlanResourceForecastData",
+      "autoscaling-plans:DescribeScalingPlanResources",
+      "autoscaling:DescribeAutoScalingNotificationTypes",
+      "autoscaling:DescribeLifecycleHookTypes",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeTerminationPolicyTypes",
+      "autoscaling:DescribeScalingProcessTypes",
+      "autoscaling:DescribePolicies",
+      "autoscaling:DescribeTags",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeMetricCollectionTypes",
+      "autoscaling:DescribeLoadBalancers",
+      "autoscaling:DescribeLifecycleHooks",
+      "autoscaling:DescribeAdjustmentTypes",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAccountLimits",
+      "autoscaling:DescribeScheduledActions",
+      "autoscaling:DescribeLoadBalancerTargetGroups",
+      "autoscaling:DescribeNotificationConfigurations",
+      "autoscaling:DescribeInstanceRefreshes",
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+      "ec2:DescribeLaunchTemplateVersions"
+    ]
+
+    resources = [
+      "*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "autoscaler" {
+  name   = format("%s-autoscaler", var.project_name)
+  policy = data.aws_iam_policy_document.autoscaler_policy.json
+}
+
+resource "aws_iam_role_policy_attachment" "autoscaler" {
+  role       = aws_iam_role.autoscaler.name
+  policy_arn = aws_iam_policy.autoscaler.arn
+}
+```
+
+This creates the trust relationship between the cluster and AWS IAM.
+
+---
+
+# Step 61 - Creating the IAM Policy
+
+The Autoscaler needs permissions to manage infrastructure.
+
+Typical permissions include:
+
+```hcl
+data "aws_iam_policy_document" "autoscaler_policy" {
+  version = "2012-10-17"
+
+  statement {
+
+    effect = "Allow"
+    actions = [
+      "autoscaling-plans:DescribeScalingPlans",
+      "autoscaling-plans:GetScalingPlanResourceForecastData",
+      "autoscaling-plans:DescribeScalingPlanResources",
+      "autoscaling:DescribeAutoScalingNotificationTypes",
+      "autoscaling:DescribeLifecycleHookTypes",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeTerminationPolicyTypes",
+      "autoscaling:DescribeScalingProcessTypes",
+      "autoscaling:DescribePolicies",
+      "autoscaling:DescribeTags",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeMetricCollectionTypes",
+      "autoscaling:DescribeLoadBalancers",
+      "autoscaling:DescribeLifecycleHooks",
+      "autoscaling:DescribeAdjustmentTypes",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAccountLimits",
+      "autoscaling:DescribeScheduledActions",
+      "autoscaling:DescribeLoadBalancerTargetGroups",
+      "autoscaling:DescribeNotificationConfigurations",
+      "autoscaling:DescribeInstanceRefreshes",
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup",
+      "ec2:DescribeLaunchTemplateVersions"
+    ]
+
+    resources = [
+      "*"
+    ]
+  }
+}
+```
+
+This policy allows the Autoscaler to:
+
+```txt
+Inspect node groups
+Increase/decrease capacity
+Manage instances lifecycle
+```
+
+---
+
+# Step 62 - Attaching Policy to the Role
+
+Now we attach the policy to the IAM Role:
+
+```hcl
+resource "aws_iam_role_policy_attachment" "autoscaler" {
+  role       = aws_iam_role.autoscaler.name
+  policy_arn = aws_iam_policy.autoscaler.arn
+}
+```
+
+At this point:
+
+```txt
+Role is created
+Policy is attached
+Trust with OIDC is configured
+```
+
+The Autoscaler can now authenticate securely.
+
+---
+
+# Step 63 - Deploying Cluster Autoscaler via Helm
+
+We deploy the Autoscaler using Helm.
+
+Create a new file `helm_cluster_autoscaler.tf`:
+
+```hcl
+resource "helm_release" "cluster_autoscaler" {
+
+  repository = "https://kubernetes.github.io/autoscaler"
+
+  chart = "cluster-autoscaler"
+  name  = "aws-cluster-autoscaler"
+
+  namespace        = "kube-system"
+  create_namespace = true
+
+  values = [
+    yamlencode({
+      replicaCount = 1
+      awsRegion    = var.region
+      rbac = {
+        serviceAccount = {
+          create = true
+          annotations = {
+            "eks.amazonaws.com/role-arn" = aws_iam_role.autoscaler.arn
+          }
+        }
+      }
+      autoscalingGroups = [
+        {
+          name    = aws_eks_node_group.main.resources[0].autoscaling_groups[0].name
+          maxSize = lookup(var.auto_scale_options, "max")
+          minSize = lookup(var.auto_scale_options, "min")
+        }
+      ]
+    })
+  ]
+
+  depends_on = [
+    aws_eks_cluster.main,
+    aws_eks_node_group.main,
+  ]
+}
+```
+
+The annotation is what links the pod to the IAM Role.
+
+---
+
+# Step 64 - Configuring Node Group Limits
+
+The Autoscaler respects min/max values defined in node groups.
+
+Example:
+
+```txt
+min_size     = 2
+max_size     = 10
+desired_size = 2
+```
+
+It will:
+
+```txt
+Scale up → until max
+Scale down → until min
+```
+
+---
+
+# Step 65 - Validating Autoscaler Deployment
+
+Check if the pod is running:
+
+```bash
+kubectl get pods -n kube-system
+```
+
+---
+
+# Step 66 - Testing Scale Up
+
+Now we force the cluster to scale.
+
+Increase replicas of an application:
+
+```bash
+kubectl scale deployment chip --replicas=300
+```
+
+What happens:
+
+```txt
+Pods go to Pending
+Autoscaler detects lack of capacity
+New nodes are created
+```
+
+---
+
+# Step 67 - Observing Node Creation
+
+Check nodes:
+
+```bash
+kubectl get nodes
+```
+
+You will see:
+
+```txt
+New nodes joining the cluster
+Nodes in NotReady → Ready state
+```
+
+Autoscaler keeps adding nodes until all pods are scheduled.
+
+---
+
+# Step 68 - Testing Further Scaling
+
+Increase even more:
+
+```bash
+kubectl scale deployment chip --replicas=500
+```
+
+Behavior:
+
+```txt
+More Pending pods
+Autoscaler provisions additional nodes
+Cluster stabilizes again
+```
+
+---
+
+# Step 69 - Scaling Down
+
+Now reduce workload:
+
+```bash
+kubectl scale deployment chip --replicas=4
+```
+
+After some time:
+
+```txt
+Unused nodes are terminated
+Cluster returns to baseline
+```
+
+---
+
+# Step 70 - Understanding the Behavior
+
+Cluster Autoscaler works based on:
+
+```txt
+Pending pods → scale up
+Idle nodes → scale down
+```
+
+Important:
+
+```txt
+It operates at node level (not pod level)
+Depends on node groups
+```
+
+---
+
+# Step 71 - Introducing Node Termination Handler
+
+When using Spot instances, nodes can be terminated by AWS.
+
+The Node Termination Handler helps by:
+
+```txt
+Detecting termination events
+Draining the node
+Evicting pods safely
+Rescheduling workloads
+```
+
+This avoids:
+
+```txt
+Sudden pod loss
+Application downtime
+```
+
+---
+
+# Step 72 - Why This Is Important
+
+Without this:
+
+```txt
+Spot instance is terminated → pods die instantly
+```
+
+With Node Termination Handler:
+
+```txt
+Pods are gracefully moved before termination
+```
+
+This is critical for production environments using Spot.
+
+---
