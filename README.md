@@ -88,7 +88,7 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Workload segregation  
 - Interruption queue handling  
 
-### Module 6: Karpenter Groupless Architecture
+### Module 6: Karpenter Groupless Architecture (Part 2)
 
 - Production strategies  
 - Fargate main profiles  
