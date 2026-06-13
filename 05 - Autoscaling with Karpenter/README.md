@@ -1523,3 +1523,513 @@ This is where we start moving from a proof of concept into a production-ready im
 
 ---
 
+# Module 5 - Lesson 4
+## Automating Karpenter NodePools with Terraform
+
+So far, we have been creating our `EC2NodeClass` and `NodePool` resources manually.
+
+While this works well for learning purposes, it quickly becomes difficult to maintain in real environments where multiple workloads require different node configurations.
+
+The goal of this lesson is to automate the creation of Karpenter resources using Terraform.
+
+Instead of manually writing YAML files, we will generate them dynamically from Terraform variables and deploy them directly into Kubernetes.
+
+This approach makes it easier to:
+
+```txt
+Create multiple NodePools
+Create multiple EC2NodeClasses
+Reuse configurations across environments
+Standardize infrastructure
+Reduce manual work
+```
+
+By the end of this lesson, Karpenter resources will be fully generated from Terraform inputs.
+
+---
+
+# Step 47 - Installing the Kubectl Manifest Provider
+
+To apply Kubernetes manifests directly from Terraform, we will use the `kubectl_manifest` provider.
+
+This provider allows Terraform to send raw YAML manifests to the cluster.
+
+Conceptually:
+
+```txt
+Terraform Variables
+        ↓
+Template Files
+        ↓
+Generated YAML
+        ↓
+kubectl_manifest
+        ↓
+Kubernetes Cluster
+```
+
+```txt
+provider.tf
+```
+
+```hcl
+terraform {
+  required_providers {
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = ">= 1.7.0"
+    }
+  }
+}
+```
+
+After adding the provider configuration, run:
+
+```bash
+terraform init -backend-config=environment/prod/backend.tfvars
+```
+
+Terraform will download the required provider and make it available for use.
+
+---
+
+# Step 48 - Defining the Capacity Configuration
+
+Before generating manifests dynamically, we need a structure that describes our desired capacity.
+
+Create a variable called:
+
+```hcl
+variable "karpenter_capacity"
+```
+
+Instead of creating a single NodePool, we will create a list of NodePools.
+
+This gives us the flexibility to create:
+
+```txt
+General workloads
+Critical workloads
+Spot workloads
+Machine Learning workloads
+GPU workloads
+```
+
+all from the same Terraform logic.
+
+Our variable will contain information such as:
+
+```txt
+Name
+Workload Label
+AMI Family
+Instance Families
+Instance Sizes
+Capacity Type
+Availability Zones
+```
+
+---
+
+# Step 49 - Creating the Capacity Object
+
+A single entry in the list might look like:
+
+```hcl
+karpenter_capacity = [
+  {
+    name               = "linux-apps"
+    workload           = "linux"
+    ami_family         = "AL2023"
+
+    instance_family    = ["t3a"]
+    instance_sizes     = ["large"]
+
+    capacity_type      = ["spot"]
+
+    availability_zones = [
+      "us-east-1a",
+      "us-east-1b",
+      "us-east-1c"
+    ]
+  }
+]
+```
+
+This object now contains everything necessary to generate both:
+
+```txt
+EC2NodeClass
+NodePool
+```
+
+---
+
+# Step 50 - Retrieving the Latest AMI Automatically
+
+Hardcoding AMI IDs is not a good practice.
+
+AWS already publishes the latest EKS-compatible AMIs through Systems Manager Parameter Store (SSM).
+
+Instead of storing AMI IDs manually, we can retrieve them dynamically.
+
+Example:
+
+```hcl
+data "aws_ssm_parameter" "karpenter_ami" {
+  count = length(var.karpenter_capacity)
+
+  name = var.karpenter_capacity[count.index].ami_ssm
+}
+```
+
+Benefits:
+
+```txt
+Always use the latest AMI
+No manual updates
+Less maintenance
+More automation
+```
+
+---
+
+# Step 51 - Creating Template Files
+
+Instead of embedding large YAML documents inside Terraform resources, we will use template files.
+
+Create a new directory:
+
+```txt
+files/
+```
+
+Inside it create:
+
+```txt
+files/
+├── ec2_node_class.yaml
+└── node_pool.yaml
+```
+
+These files will contain the YAML templates used to generate the Karpenter resources.
+
+---
+
+# Step 52 - Building the EC2NodeClass Template
+
+The first template is the EC2NodeClass.
+
+Inside the template we replace static values with variables.
+
+Example:
+
+```yaml
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: ${name}
+
+spec:
+  amiFamily: ${ami_family}
+
+  instanceProfile: ${instance_profile}
+
+  amiSelectorTerms:
+    - id: ${ami_id}
+```
+
+Terraform will replace these placeholders automatically during execution.
+
+---
+
+# Step 53 - Handling Dynamic Subnets
+
+Subnets are stored as a list.
+
+Because of that we need to generate them dynamically inside the template.
+
+Example:
+
+```yaml
+subnetSelectorTerms:
+%{ for subnet in subnets ~}
+  - id: ${subnet}
+%{ endfor ~}
+```
+
+Terraform loops through every subnet and generates valid YAML.
+
+This allows the same template to work for any environment.
+
+---
+
+# Step 54 - Creating the EC2NodeClass Resource
+
+Now we can connect the template to Terraform.
+
+Example:
+
+```hcl
+resource "kubectl_manifest" "ec2_node_class" {
+  count = length(var.karpenter_capacity)
+
+  yaml_body = templatefile(
+    "${path.module}/files/ec2_node_class.yaml",
+    {
+      name             = var.karpenter_capacity[count.index].name
+      instance_profile = aws_iam_instance_profile.nodes.name
+      ami_family       = var.karpenter_capacity[count.index].ami_family
+      ami_id           = data.aws_ssm_parameter.karpenter_ami[count.index].value
+      subnets          = local.pod_subnets
+      security_group   = aws_security_group.cluster.id
+    }
+  )
+}
+```
+
+At this point Terraform can generate EC2NodeClasses dynamically.
+
+---
+
+# Step 55 - Validating the EC2NodeClass
+
+Apply the configuration:
+
+```bash
+terraform apply
+```
+
+Verify the resource:
+
+```bash
+kubectl get ec2nodeclasses
+```
+
+Expected result:
+
+```txt
+linux-apps
+```
+
+The resource is now being managed entirely through Terraform.
+
+---
+
+# Step 56 - Building the NodePool Template
+
+The NodePool template is slightly more complex because it contains multiple lists.
+
+Examples:
+
+```txt
+Instance Families
+Instance Sizes
+Capacity Types
+Availability Zones
+```
+
+Each of these values must be rendered dynamically.
+
+---
+
+# Step 57 - Generating Instance Families
+
+Inside the template:
+
+```yaml
+- key: karpenter.k8s.aws/instance-family
+  operator: In
+  values:
+%{ for family in instance_family ~}
+    - ${family}
+%{ endfor ~}
+```
+
+Terraform will convert:
+
+```hcl
+["t3a", "m6a"]
+```
+
+into:
+
+```yaml
+values:
+  - t3a
+  - m6a
+```
+
+---
+
+# Step 58 - Generating Instance Sizes
+
+The same technique applies to instance sizes.
+
+Template:
+
+```yaml
+- key: karpenter.k8s.aws/instance-size
+  operator: In
+  values:
+%{ for size in instance_sizes ~}
+    - ${size}
+%{ endfor ~}
+```
+
+Example output:
+
+```yaml
+values:
+  - large
+  - xlarge
+```
+
+---
+
+# Step 59 - Generating Capacity Types
+
+Capacity type can also be generated dynamically.
+
+Template:
+
+```yaml
+- key: karpenter.sh/capacity-type
+  operator: In
+  values:
+%{ for type in capacity_type ~}
+    - ${type}
+%{ endfor ~}
+```
+
+Possible values:
+
+```txt
+spot
+on-demand
+```
+
+or both.
+
+---
+
+# Step 60 - Creating Dynamic Workload Labels
+
+We can also generate labels automatically.
+
+Example:
+
+```yaml
+labels:
+  workload: ${workload}
+```
+
+This becomes extremely useful later when we start segregating workloads across different NodePools.
+
+Examples:
+
+```txt
+workload=critical
+workload=apps
+workload=batch
+workload=ml
+```
+
+---
+
+# Step 61 - Creating the NodePool Resource
+
+Once the template is ready, create the Terraform resource.
+
+Example:
+
+```hcl
+resource "kubectl_manifest" "node_pool" {
+  count = length(var.karpenter_capacity)
+
+  yaml_body = templatefile(
+    "${path.module}/files/node_pool.yaml",
+    {
+      name               = var.karpenter_capacity[count.index].name
+      workload           = var.karpenter_capacity[count.index].workload
+      instance_family    = var.karpenter_capacity[count.index].instance_family
+      instance_sizes     = var.karpenter_capacity[count.index].instance_sizes
+      capacity_type      = var.karpenter_capacity[count.index].capacity_type
+      availability_zones = var.karpenter_capacity[count.index].availability_zones
+    }
+  )
+}
+```
+
+---
+
+# Step 62 - Applying the Configuration
+
+Run:
+
+```bash
+terraform apply
+```
+
+Terraform will now generate:
+
+```txt
+EC2NodeClass
+NodePool
+```
+
+from the capacity configuration.
+
+Verify:
+
+```bash
+kubectl get ec2nodeclasses
+kubectl get nodepools
+```
+
+---
+
+# Step 63 - Benefits of This Approach
+
+Instead of creating YAML files manually, everything is now driven by Terraform variables.
+
+Adding a new NodePool becomes as simple as adding another object to the list.
+
+Example:
+
+```hcl
+karpenter_capacity = [
+  {...},
+  {...},
+  {...}
+]
+```
+
+Terraform automatically creates:
+
+```txt
+Multiple EC2NodeClasses
+Multiple NodePools
+```
+
+without duplicating code.
+
+---
+
+# Step 64 - Preparing for Workload Segregation
+
+At this point we have automated the entire Karpenter provisioning process.
+
+The next step is to take advantage of this flexibility.
+
+We will start creating multiple NodePools for different workload types and learn how to:
+
+```txt
+Distribute workloads across AZs
+Separate critical and non-critical applications
+Use Spot instances safely
+Improve availability
+Reduce infrastructure costs
+```
+
+This is where Karpenter becomes significantly more powerful than traditional node groups and Cluster Autoscaler.
