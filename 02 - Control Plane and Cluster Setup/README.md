@@ -1,5 +1,7 @@
 # Module 2: Creating the First EKS Cluster (Vanilla Setup)
 
+## Overview
+
 Welcome to Module 2 of the LinuxTips EKS Learning Path.
 
 The main goal here is to build what we will call a **vanilla structure**.
@@ -37,7 +39,147 @@ Now let's start coding.
 
 ---
 
-# Step 1 — Creating the Repository
+## Table of Contents
+
+- [Lesson 1: Terraform Project Setup and Base Configuration](#lesson-1-terraform-project-setup-and-base-configuration)
+  - [1. Creating the Repository](#1-creating-the-repository)
+  - [2. Initial Terraform Structure](#2-initial-terraform-structure)
+  - [3. Creating Base Variables](#3-creating-base-variables)
+  - [4. Configuring the Terraform Backend](#4-configuring-the-terraform-backend)
+  - [5. Terraform Variables File](#5-terraform-variables-file)
+  - [6. Configuring the AWS Provider](#6-configuring-the-aws-provider)
+  - [7. Loading Values From Parameter Store](#7-loading-values-from-parameter-store)
+  - [8. Declaring SSM Variables](#8-declaring-ssm-variables)
+  - [9. Declaring the TFVars Values](#9-declaring-the-tfvars-values)
+  - [10. Initial Terraform Run](#10-initial-terraform-run)
+  - [11. Loading Parameters Using Data Sources](#11-loading-parameters-using-data-sources)
+  - [12. Loading Public Subnets](#12-loading-public-subnets)
+  - [13. Loading Private Subnets](#13-loading-private-subnets)
+  - [14. Loading Pod Subnets](#14-loading-pod-subnets)
+  - [15. Testing Data Sources](#15-testing-data-sources)
+- [Lesson 2: Creating IAM Roles and KMS for the EKS Cluster](#lesson-2-creating-iam-roles-and-kms-for-the-eks-cluster)
+  - [1. Creating the Assume Role Policy](#1-creating-the-assume-role-policy)
+  - [2. Creating the Cluster IAM Role](#2-creating-the-cluster-iam-role)
+  - [3. Attaching the EKS Cluster Policy](#3-attaching-the-eks-cluster-policy)
+  - [4. Attaching the EKS Service Policy](#4-attaching-the-eks-service-policy)
+  - [5. Creating the Worker Nodes IAM Role](#5-creating-the-worker-nodes-iam-role)
+  - [6. Creating the Nodes Role](#6-creating-the-nodes-role)
+  - [7. Attaching Required Policies to Nodes](#7-attaching-required-policies-to-nodes)
+    - [CNI Policy](#cni-policy)
+    - [Worker Node Policy](#worker-node-policy)
+    - [ECR Read Access](#ecr-read-access)
+    - [SSM Access](#ssm-access)
+    - [CloudWatch Agent](#cloudwatch-agent)
+  - [8. Creating the Instance Profile](#8-creating-the-instance-profile)
+  - [9. Creating the KMS Key](#9-creating-the-kms-key)
+  - [10. Creating a KMS Alias](#10-creating-a-kms-alias)
+- [Lesson 3: Creating the EKS Control Plane](#lesson-3-creating-the-eks-control-plane)
+  - [1. Creating the EKS Cluster Resource](#1-creating-the-eks-cluster-resource)
+  - [2. Defining the Cluster Name](#2-defining-the-cluster-name)
+  - [3. Creating the Kubernetes Version Variable](#3-creating-the-kubernetes-version-variable)
+  - [4. Setting the Kubernetes Version](#4-setting-the-kubernetes-version)
+  - [5. Defining the Cluster IAM Role](#5-defining-the-cluster-iam-role)
+  - [6. Configuring VPC Networking](#6-configuring-vpc-networking)
+  - [7. Configuring Encryption](#7-configuring-encryption)
+  - [8. Access Configuration](#8-access-configuration)
+  - [9. Bootstrap Admin Permissions](#9-bootstrap-admin-permissions)
+  - [10. Enabling Control Plane Logs](#10-enabling-control-plane-logs)
+  - [11. Cluster Tag](#11-cluster-tag)
+  - [12. API Endpoint Security](#12-api-endpoint-security)
+  - [13. Creating the OIDC Provider](#13-creating-the-oidc-provider)
+  - [14. Creating the OpenID Connect Provider](#14-creating-the-openid-connect-provider)
+  - [15. Creating the Cluster](#15-creating-the-cluster)
+  - [16. Verifying the Cluster](#16-verifying-the-cluster)
+  - [17. Connecting to the Cluster](#17-connecting-to-the-cluster)
+  - [18. Testing the Connection](#18-testing-the-connection)
+- [Lesson 4: Managing the Cluster Security Group](#lesson-4-managing-the-cluster-security-group)
+  - [1. Creating a Security Group Rule](#1-creating-a-security-group-rule)
+  - [2. Defining the Rule Type](#2-defining-the-rule-type)
+  - [3. Defining the NodePort Range](#3-defining-the-nodeport-range)
+  - [4. Defining the Protocol](#4-defining-the-protocol)
+  - [5. Defining the CIDR Block](#5-defining-the-cidr-block)
+  - [6. Attaching the Rule to the Cluster Security Group](#6-attaching-the-rule-to-the-cluster-security-group)
+  - [7. Applying the Configuration](#7-applying-the-configuration)
+  - [8. Example: Allowing DNS Traffic](#8-example-allowing-dns-traffic)
+- [Lesson 5: Enabling ARC Zonal Shift for the Control Plane](#lesson-5-enabling-arc-zonal-shift-for-the-control-plane)
+  - [1. Understanding Zonal Shift](#1-understanding-zonal-shift)
+  - [2. Enabling Zonal Shift in the Cluster](#2-enabling-zonal-shift-in-the-cluster)
+  - [3. Why This Feature Matters](#3-why-this-feature-matters)
+  - [4. Applying the Configuration](#4-applying-the-configuration)
+  - [5. Verifying in the AWS Console](#5-verifying-in-the-aws-console)
+- [Lesson 6: Configuring AWS Auth (aws-auth ConfigMap) Using Terraform](#lesson-6-configuring-aws-auth-aws-auth-configmap-using-terraform)
+  - [1. Authentication Methods in EKS](#1-authentication-methods-in-eks)
+  - [2. Using the Kubernetes Terraform Provider](#2-using-the-kubernetes-terraform-provider)
+  - [3. Authenticating Terraform with the Cluster](#3-authenticating-terraform-with-the-cluster)
+  - [4. Retrieving the Caller Identity](#4-retrieving-the-caller-identity)
+  - [5. Configuring the Kubernetes Provider](#5-configuring-the-kubernetes-provider)
+  - [6. Creating the aws-auth ConfigMap](#6-creating-the-aws-auth-configmap)
+  - [7. Mapping the Node IAM Role](#7-mapping-the-node-iam-role)
+  - [8. Ensuring Proper Deployment Order](#8-ensuring-proper-deployment-order)
+  - [9. Applying the Configuration](#9-applying-the-configuration)
+  - [10. Verifying the ConfigMap](#10-verifying-the-configmap)
+- [Lesson 7: Creating the First Managed Node Group](#lesson-7-creating-the-first-managed-node-group)
+  - [1. Defining Capacity Variables](#1-defining-capacity-variables)
+  - [2. Configuring the Variables](#2-configuring-the-variables)
+  - [3. Creating the EKS Node Group Resource](#3-creating-the-eks-node-group-resource)
+  - [4. Configuring Node Scaling](#4-configuring-node-scaling)
+  - [5. Assigning Subnets](#5-assigning-subnets)
+  - [6. Adding Node Labels](#6-adding-node-labels)
+  - [7. Preventing Scaling Drift](#7-preventing-scaling-drift)
+  - [8. Ensuring Correct Dependency Order](#8-ensuring-correct-dependency-order)
+  - [9. Configuring Timeouts](#9-configuring-timeouts)
+  - [10. Applying the Configuration](#10-applying-the-configuration)
+  - [11. Verifying the Nodes](#11-verifying-the-nodes)
+  - [12. Viewing the Node Group in AWS](#12-viewing-the-node-group-in-aws)
+  - [13. Inspecting the EC2 Instances](#13-inspecting-the-ec2-instances)
+- [Lesson 8: Migrating from aws-auth ConfigMap to Access Entries](#lesson-8-migrating-from-aws-auth-configmap-to-access-entries)
+  - [1. Understanding Access Entries](#1-understanding-access-entries)
+  - [2. Creating an Access Entry for Nodes](#2-creating-an-access-entry-for-nodes)
+  - [3. Updating the Node Group's Dependency Order](#3-updating-the-node-groups-dependency-order)
+  - [4. Applying the Configuration](#4-applying-the-configuration-1)
+  - [5. Removing the aws-auth ConfigMap](#5-removing-the-aws-auth-configmap)
+  - [6. Verifying Access Entries in AWS](#6-verifying-access-entries-in-aws)
+  - [7. Testing the Node Authentication](#7-testing-the-node-authentication)
+- [Lesson 9: Managing EKS Add-ons with Terraform](#lesson-9-managing-eks-add-ons-with-terraform)
+  - [1. Choosing the Core Add-ons](#1-choosing-the-core-add-ons)
+  - [2. Creating Variables for Add-on Versions](#2-creating-variables-for-add-on-versions)
+  - [3. Defining Versions in terraform.tfvars](#3-defining-versions-in-terraformtfvars)
+  - [4. Creating the VPC CNI Add-on](#4-creating-the-vpc-cni-add-on)
+  - [5. Creating the CoreDNS Add-on](#5-creating-the-coredns-add-on)
+  - [6. Creating the kube-proxy Add-on](#6-creating-the-kube-proxy-add-on)
+  - [7. Creating the Pod Identity Agent Add-on](#7-creating-the-pod-identity-agent-add-on)
+  - [8. Defining Dependencies](#8-defining-dependencies)
+  - [9. Applying the Configuration](#9-applying-the-configuration-1)
+  - [10. Verifying the Add-ons](#10-verifying-the-add-ons)
+  - [11. Viewing Add-ons in the AWS Console](#11-viewing-add-ons-in-the-aws-console)
+- [Lesson 10: Using the Helm Provider with Terraform](#lesson-10-using-the-helm-provider-with-terraform)
+  - [1. Configuring the Helm Provider](#1-configuring-the-helm-provider)
+  - [2. Installing the Metrics Server](#2-installing-the-metrics-server)
+  - [3. Applying the Configuration](#3-applying-the-configuration)
+  - [4. Verifying the Metrics Server](#4-verifying-the-metrics-server)
+  - [5. Installing kube-state-metrics](#5-installing-kube-state-metrics)
+  - [6. Applying the Deployment](#6-applying-the-deployment)
+  - [7. Verifying the Installation](#7-verifying-the-installation)
+  - [8. Why Helm Is Important](#8-why-helm-is-important)
+- [Lesson 11: Deploying the First Application in the EKS Cluster](#lesson-11-deploying-the-first-application-in-the-eks-cluster)
+  - [1. Creating the Application Manifest](#1-creating-the-application-manifest)
+  - [2. Creating the Namespace](#2-creating-the-namespace)
+  - [3. Creating the Deployment](#3-creating-the-deployment)
+  - [4. Creating the Service](#4-creating-the-service)
+  - [5. Creating the Horizontal Pod Autoscaler](#5-creating-the-horizontal-pod-autoscaler)
+  - [6. Applying the Manifest](#6-applying-the-manifest)
+  - [7. Verifying the Deployment](#7-verifying-the-deployment)
+  - [8. Checking the Service](#8-checking-the-service)
+  - [9. Checking the Autoscaler](#9-checking-the-autoscaler)
+  - [Result](#result)
+  - [Conclusion of the Vanilla Cluster](#conclusion-of-the-vanilla-cluster)
+  - [Full Code](#full-code)
+
+---
+
+# Lesson 1: Terraform Project Setup and Base Configuration
+
+## 1. Creating the Repository
 
 The first thing we need to do is **create a repository for this lesson**.
 
@@ -66,7 +208,7 @@ After creating it:
 
 ---
 
-# Step 2 — Initial Terraform Structure
+## 2. Initial Terraform Structure
 
 We will follow **exactly the same folder structure used in the networking module**.
 
@@ -125,7 +267,7 @@ For now, this minimal structure is enough.
 
 ---
 
-# Step 3 — Creating Base Variables
+## 3. Creating Base Variables
 
 Inside `variables.tf`, create the base variables used across the project.
 
@@ -133,6 +275,7 @@ We will define:
 
 - project name
 - AWS region
+- AWS profile
 
 Example structure:
 
@@ -144,13 +287,17 @@ variable "project_name" {
 variable "region" {
   type = string
 }
+
+variable "profile" {
+  type = string
+}
 ```
 
 These values will be provided later through `terraform.tfvars`.
 
 ---
 
-# Step 4 — Configuring the Terraform Backend
+## 4. Configuring the Terraform Backend
 
 Now we configure the **remote state backend** using **S3**, just like in the previous lesson.
 
@@ -178,7 +325,7 @@ You should adapt these values to your own environment.
 
 ---
 
-# Step 5 — Terraform Variables File
+## 5. Terraform Variables File
 
 Now create `terraform.tfvars` with the project configuration.
 
@@ -187,13 +334,14 @@ Example:
 ```hcl
 project_name = "linuxtips-cluster"
 region       = "us-east-1"
+profile      = "personal"
 ```
 
 These values will be loaded automatically by Terraform.
 
 ---
 
-# Step 6 — Configuring the AWS Provider
+## 6. Configuring the AWS Provider
 
 Now we configure the **AWS provider**.
 
@@ -201,15 +349,16 @@ In `provider.tf`:
 
 ```hcl
 provider "aws" {
-  region = var.region
+  region  = var.region
+  profile = var.profile
 }
 ```
 
-This ensures Terraform will interact with AWS in the correct region.
+This ensures Terraform will interact with AWS in the correct region, using the AWS CLI profile configured on your machine.
 
 ---
 
-# Step 7 — Loading Values From Parameter Store
+## 7. Loading Values From Parameter Store
 
 Now comes an important part.
 
@@ -228,7 +377,7 @@ This approach allows us to **decouple the networking infrastructure from the clu
 
 ---
 
-# Step 8 — Declaring SSM Variables
+## 8. Declaring SSM Variables
 
 Inside `variables.tf`, add the variables that will store the **SSM parameter names**.
 
@@ -268,7 +417,7 @@ For now, we will **not use database subnets**, so we can ignore them.
 
 ---
 
-# Step 9 — Declaring the TFVars Values
+## 9. Declaring the TFVars Values
 
 Now populate these variables in `terraform.tfvars`.
 
@@ -300,7 +449,7 @@ These paths must match the **parameters created in the networking module**.
 
 ---
 
-# Step 10 — Initial Terraform Run
+## 10. Initial Terraform Run
 
 Now we test if everything is configured correctly.
 
@@ -332,7 +481,7 @@ If no errors appear, we are ready to continue.
 
 ---
 
-# Step 11 — Loading Parameters Using Data Sources
+## 11. Loading Parameters Using Data Sources
 
 Now we will **load the Parameter Store values into memory** during Terraform execution.
 
@@ -348,7 +497,7 @@ data "aws_ssm_parameter" "vpc" {
 
 ---
 
-# Step 12 — Loading Public Subnets
+## 12. Loading Public Subnets
 
 For the public subnets we need a **loop**, because we have multiple parameters.
 
@@ -363,7 +512,7 @@ This loads **each subnet parameter dynamically**.
 
 ---
 
-# Step 13 — Loading Private Subnets
+## 13. Loading Private Subnets
 
 The same logic applies to private subnets.
 
@@ -376,7 +525,7 @@ data "aws_ssm_parameter" "private_subnets" {
 
 ---
 
-# Step 14 — Loading Pod Subnets
+## 14. Loading Pod Subnets
 
 And finally the pod subnets:
 
@@ -389,7 +538,7 @@ data "aws_ssm_parameter" "pod_subnets" {
 
 ---
 
-# Step 15 — Testing Data Sources
+## 15. Testing Data Sources
 
 Run Terraform again to confirm everything loads correctly:
 
@@ -408,8 +557,7 @@ Now all networking values are **available in memory for Terraform**.
 
 ---
 
-# Module 2 — Lesson 2  
-## Creating IAM Roles and KMS for the EKS Cluster
+# Lesson 2: Creating IAM Roles and KMS for the EKS Cluster
 
 Now let's start creating the **IAM resources required by our EKS cluster**.
 
@@ -431,7 +579,7 @@ So the first thing we do is define an **IAM policy document**.
 
 ---
 
-# Step 16 — Creating the Assume Role Policy
+## 1. Creating the Assume Role Policy
 
 First we create a **data source** that defines the **assume role policy**.
 
@@ -475,7 +623,7 @@ This means the **EKS service itself will assume this role**.
 
 ---
 
-# Step 17 — Creating the Cluster IAM Role
+## 2. Creating the Cluster IAM Role
 
 Now we create the actual IAM role.
 
@@ -492,7 +640,7 @@ So we now attach the required AWS managed policies.
 
 ---
 
-# Step 18 — Attaching the EKS Cluster Policy
+## 3. Attaching the EKS Cluster Policy
 
 The first required policy is:
 
@@ -513,11 +661,11 @@ This policy allows the EKS control plane to **manage cluster resources**.
 
 ---
 
-# Step 19 — Attaching the EKS Service Policy
+## 4. Attaching the EKS Service Policy
 
 The second required policy is:
 
-```
+```txt
 AmazonEKSServicePolicy
 ```
 
@@ -532,7 +680,7 @@ Now our **EKS control plane role is ready**.
 
 ---
 
-# Step 20 — Creating the Worker Nodes IAM Role
+## 5. Creating the Worker Nodes IAM Role
 
 Now we create another file:
 
@@ -576,7 +724,7 @@ This is because **worker nodes are EC2 instances**.
 
 ---
 
-# Step 21 — Creating the Nodes Role
+## 6. Creating the Nodes Role
 
 Now we create the nodes IAM role.
 
@@ -593,7 +741,7 @@ Worker nodes require **more permissions than the control plane role**.
 
 ---
 
-# Step 22 — Attaching Required Policies to Nodes
+## 7. Attaching Required Policies to Nodes
 
 Worker nodes require several AWS managed policies.
 
@@ -664,7 +812,7 @@ Now our **nodes role has all required permissions**.
 
 ---
 
-# Step 23 — Creating the Instance Profile
+## 8. Creating the Instance Profile
 
 EC2 instances cannot assume roles directly.
 
@@ -681,7 +829,7 @@ This profile will be used later by **worker nodes**.
 
 ---
 
-# Step 24 — Creating the KMS Key
+## 9. Creating the KMS Key
 
 We create another file:
 
@@ -706,7 +854,7 @@ For example:
 
 ---
 
-# Step 25 — Creating a KMS Alias
+## 10. Creating a KMS Alias
 
 It is good practice to create an alias for easier identification.
 
@@ -721,8 +869,7 @@ Now the key can easily be identified inside AWS.
 
 ---
 
-# Module 2 — Lesson 3  
-## Creating the EKS Control Plane
+# Lesson 3: Creating the EKS Control Plane
 
 Now we are going to create our **first real EKS resource**, which is the **EKS Cluster itself**.
 
@@ -740,7 +887,7 @@ Now we will finally create the **EKS control plane**.
 
 ---
 
-# Step 26 — Creating the EKS Cluster Resource
+## 1. Creating the EKS Cluster Resource
 
 Create a new file:
 
@@ -760,7 +907,7 @@ This resource represents the **Kubernetes control plane managed by AWS**.
 
 ---
 
-# Step 27 — Defining the Cluster Name
+## 2. Defining the Cluster Name
 
 The cluster needs a name.
 
@@ -772,7 +919,7 @@ Using the project name helps keep everything standardized.
 
 ---
 
-# Step 28 — Creating the Kubernetes Version Variable
+## 3. Creating the Kubernetes Version Variable
 
 Before continuing, let's create a new variable called:
 
@@ -791,14 +938,12 @@ variable "k8s_version" {
 And inside `terraform.tfvars`:
 
 ```hcl
-k8s_version = "1.34"
+k8s_version = "1.35"
 ```
-
-At the time this course was recorded, **Kubernetes 1.31** was the latest supported version.
 
 ---
 
-# Step 29 — Setting the Kubernetes Version
+## 4. Setting the Kubernetes Version
 
 Back in the cluster resource:
 
@@ -810,7 +955,7 @@ This defines which Kubernetes version the control plane will run.
 
 ---
 
-# Step 30 — Defining the Cluster IAM Role
+## 5. Defining the Cluster IAM Role
 
 Now we attach the **IAM role created earlier for the control plane**.
 
@@ -822,7 +967,7 @@ This role allows EKS to manage cluster resources.
 
 ---
 
-# Step 31 — Configuring VPC Networking
+## 6. Configuring VPC Networking
 
 Now we define the **VPC configuration block**.
 
@@ -844,7 +989,7 @@ This loads the subnet IDs from **Parameter Store**.
 
 ---
 
-# Step 32 — Configuring Encryption
+## 7. Configuring Encryption
 
 Now we configure **encryption for Kubernetes secrets**.
 
@@ -861,7 +1006,7 @@ This tells EKS to use our **KMS key to encrypt Kubernetes secrets at rest**.
 
 ---
 
-# Step 33 — Access Configuration
+## 8. Access Configuration
 
 Now we configure **cluster access settings**.
 
@@ -883,7 +1028,7 @@ However, in production environments it is recommended to use **API access entrie
 
 ---
 
-# Step 34 — Bootstrap Admin Permissions
+## 9. Bootstrap Admin Permissions
 
 Another very important parameter is:
 
@@ -901,7 +1046,7 @@ With this option enabled, the **cluster creator always keeps admin privileges**,
 
 ---
 
-# Step 35 — Enabling Control Plane Logs
+## 10. Enabling Control Plane Logs
 
 Now we enable **control plane logging**.
 
@@ -925,7 +1070,7 @@ This is extremely useful for **debugging and auditing cluster activity**.
 
 ---
 
-# Step 36 — Cluster Tag
+## 11. Cluster Tag
 
 It is also good practice to include the Kubernetes cluster tag.
 
@@ -939,7 +1084,7 @@ This tag helps AWS services identify resources associated with the cluster.
 
 ---
 
-# Step 37 — API Endpoint Security
+## 12. API Endpoint Security
 
 There are also security configurations related to **cluster API access**.
 
@@ -974,7 +1119,7 @@ In this course we will leave it open for simplicity.
 
 ---
 
-# Step 38 — Creating the OIDC Provider
+## 13. Creating the OIDC Provider
 
 Before finishing the cluster setup, we also need to configure **OIDC integration**.
 
@@ -992,7 +1137,7 @@ This certificate will be used to configure the OIDC provider.
 
 ---
 
-# Step 39 — Creating the OpenID Connect Provider
+## 14. Creating the OpenID Connect Provider
 
 Now we create the IAM OIDC provider.
 
@@ -1017,7 +1162,7 @@ It is required for features like:
 
 ---
 
-# Step 40 — Creating the Cluster
+## 15. Creating the Cluster
 
 Now we can finally run Terraform.
 
@@ -1039,7 +1184,7 @@ This process usually takes **several minutes**.
 
 ---
 
-# Step 41 — Verifying the Cluster
+## 16. Verifying the Cluster
 
 After Terraform finishes, you can open the **EKS console**.
 
@@ -1054,7 +1199,7 @@ Important information available in the console includes:
 
 ---
 
-# Step 42 — Connecting to the Cluster
+## 17. Connecting to the Cluster
 
 To connect to the cluster we need:
 
@@ -1073,7 +1218,7 @@ It creates a new Kubernetes context for the cluster.
 
 ---
 
-# Step 43 — Testing the Connection
+## 18. Testing the Connection
 
 Now we can test the connection.
 
@@ -1097,8 +1242,7 @@ Will show only the **system components**.
 
 ---
 
-# Module 2 — Lesson 4  
-## Managing the Cluster Security Group
+# Lesson 4: Managing the Cluster Security Group
 
 One important detail about EKS clusters is that **every cluster automatically creates its own Security Group**.
 
@@ -1119,7 +1263,7 @@ The idea of this lesson is to demonstrate **how to manipulate the cluster securi
 
 ---
 
-# Step 44 — Creating a Security Group Rule
+## 1. Creating a Security Group Rule
 
 We do **not need to create a new security group**.
 
@@ -1138,7 +1282,7 @@ resource "aws_security_group_rule" "nodeports" {
   cidr_blocks       = ["0.0.0.0/0"]
   from_port         = 30000
   to_port           = 32768
-  protocol          = "tcp"
+  protocol          = "-1"
   description       = "Allow NodePort access to worker nodes"
   type              = "ingress"
   security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
@@ -1149,7 +1293,7 @@ This resource allows us to define **custom rules for the existing cluster securi
 
 ---
 
-# Step 45 — Defining the Rule Type
+## 2. Defining the Rule Type
 
 First we define the rule type.
 
@@ -1161,7 +1305,7 @@ This means we are allowing **incoming traffic**.
 
 ---
 
-# Step 46 — Defining the NodePort Range
+## 3. Defining the NodePort Range
 
 Kubernetes NodePort services use a specific port range.
 
@@ -1180,25 +1324,25 @@ to_port   = 32768
 
 ---
 
-# Step 47 — Defining the Protocol
+## 4. Defining the Protocol
 
 Now we define the protocol.
-
-```hcl
-protocol = "tcp"
-```
-
-If necessary, you could also allow all protocols using:
 
 ```hcl
 protocol = "-1"
 ```
 
-But in most cases using **TCP is enough**.
+This allows **all protocols** on the NodePort range, since workloads may expose NodePort services over TCP or UDP.
+
+If you want to restrict this to TCP only, you could instead use:
+
+```hcl
+protocol = "tcp"
+```
 
 ---
 
-# Step 48 — Defining the CIDR Block
+## 5. Defining the CIDR Block
 
 Now we define who is allowed to access these ports.
 
@@ -1212,7 +1356,7 @@ In production environments this should normally be **restricted to specific netw
 
 ---
 
-# Step 49 — Attaching the Rule to the Cluster Security Group
+## 6. Attaching the Rule to the Cluster Security Group
 
 Now we need the **security group ID of the cluster**.
 
@@ -1232,7 +1376,7 @@ Using this value we attach our rule to the **cluster security group created by A
 
 ---
 
-# Step 50 — Applying the Configuration
+## 7. Applying the Configuration
 
 Now run Terraform again.
 
@@ -1246,15 +1390,13 @@ You can confirm this in the AWS console.
 
 Navigate to:
 
-``  
-EKS → Cluster → Networking → Security Groups
-``
+`EKS → Cluster → Networking → Security Groups`
 
 Inside the security group you should now see the **NodePort rule allowing ports 30000–32768**.
 
 ---
 
-# Step 51 — Example: Allowing DNS Traffic
+## 8. Example: Allowing DNS Traffic
 
 We can create additional rules in the same way.
 
@@ -1286,8 +1428,7 @@ This rule allows **DNS queries**, which can be useful for services like **CoreDN
 
 ---
 
-# Module 2 — Lesson 5  
-## Enabling ARC Zonal Shift for the Control Plane
+# Lesson 5: Enabling ARC Zonal Shift for the Control Plane
 
 Another extremely important feature related to the **EKS control plane** is the ability to enable **ARC Zonal Shift**.
 
@@ -1305,7 +1446,7 @@ The **Zonal Shift feature** helps mitigate this type of problem.
 
 ---
 
-# Step 52 — Understanding Zonal Shift
+## 1. Understanding Zonal Shift
 
 The **Zonal Shift mechanism** allows AWS to **redirect traffic away from an unhealthy Availability Zone**.
 
@@ -1325,7 +1466,7 @@ This helps maintain **service availability even during partial infrastructure fa
 
 ---
 
-# Step 53 — Enabling Zonal Shift in the Cluster
+## 2. Enabling Zonal Shift in the Cluster
 
 Enabling this feature is very simple.
 
@@ -1341,7 +1482,7 @@ This activates **ARC Zonal Shift support for the cluster**.
 
 ---
 
-# Step 54 — Why This Feature Matters
+## 3. Why This Feature Matters
 
 Even though enabling Zonal Shift requires only a single configuration flag, it can significantly improve **cluster resilience**.
 
@@ -1355,7 +1496,7 @@ This is particularly valuable for **multi-AZ Kubernetes clusters**, which is the
 
 ---
 
-# Step 55 — Applying the Configuration
+## 4. Applying the Configuration
 
 Now apply the changes.
 
@@ -1369,7 +1510,7 @@ This operation is usually very fast since it is just enabling a feature flag.
 
 ---
 
-# Step 56 — Verifying in the AWS Console
+## 5. Verifying in the AWS Console
 
 After applying the configuration, you can confirm it inside the AWS console.
 
@@ -1389,8 +1530,7 @@ This means the cluster is now **capable of performing zonal traffic shifts durin
 
 ---
 
-# Module 2 — Lesson 6  
-## Configuring AWS Auth (aws-auth ConfigMap) Using Terraform
+# Lesson 6: Configuring AWS Auth (aws-auth ConfigMap) Using Terraform
 
 In this lesson we will configure the **first authentication mechanism used in Amazon EKS**.
 
@@ -1402,7 +1542,7 @@ Without this configuration, worker nodes cannot successfully register with the c
 
 ---
 
-# Step 57 — Authentication Methods in EKS
+## 1. Authentication Methods in EKS
 
 Amazon EKS supports two main authentication mechanisms for infrastructure resources:
 
@@ -1417,7 +1557,7 @@ Later we will also explore **Access Entries**, which is the more modern approach
 
 ---
 
-# Step 58 — Using the Kubernetes Terraform Provider
+## 2. Using the Kubernetes Terraform Provider
 
 To configure the aws-auth ConfigMap we will use the **Kubernetes provider for Terraform**.
 
@@ -1434,13 +1574,13 @@ This is extremely useful because it allows us to **manage Kubernetes manifests d
 
 ---
 
-# Step 59 — Authenticating Terraform with the Cluster
+## 3. Authenticating Terraform with the Cluster
 
 Before Terraform can apply Kubernetes manifests, it must authenticate with the Kubernetes API server.
 
 To achieve this, we must configure the **Kubernetes provider** using information from the EKS cluster.
 
-First we add a **data source** that retrieves information about the cluster.
+First we add a **data source** that retrieves an authentication token for the cluster.
 
 ```hcl
 data "aws_eks_cluster_auth" "default" {
@@ -1448,26 +1588,23 @@ data "aws_eks_cluster_auth" "default" {
 }
 ```
 
-This data source provides important information such as:
-
-- API endpoint  
-- certificate authority data  
+This data source provides the **token** Terraform uses to authenticate API requests against Kubernetes. The API endpoint and certificate authority data come directly from the `aws_eks_cluster` resource created earlier.
 
 ---
 
-# Step 60 — Retrieving the Authentication Token
+## 4. Retrieving the Caller Identity
 
-Next, we retrieve an authentication token that Terraform will use to communicate with the cluster.
+We also add a data source that retrieves information about the **AWS identity currently running Terraform**.
 
 ```hcl
 data "aws_caller_identity" "current" {}
 ```
 
-This token allows Terraform to **authenticate API requests against Kubernetes**.
+This exposes attributes like the AWS **account ID**, **user ID**, and **ARN** of the caller — useful whenever a resource elsewhere in the project needs to reference the current AWS account dynamically, instead of hardcoding it.
 
 ---
 
-# Step 61 — Configuring the Kubernetes Provider
+## 5. Configuring the Kubernetes Provider
 
 Now we configure the Kubernetes provider.
 
@@ -1489,7 +1626,7 @@ With these parameters Terraform can successfully **connect to the Kubernetes API
 
 ---
 
-# Step 62 — Creating the aws-auth ConfigMap
+## 6. Creating the aws-auth ConfigMap
 
 Now we create a new Terraform file responsible for defining the **aws-auth ConfigMap**.
 
@@ -1514,7 +1651,7 @@ This ConfigMap **must always be named aws-auth** and must exist in the **kube-sy
 
 ---
 
-# Step 63 — Mapping the Node IAM Role
+## 7. Mapping the Node IAM Role
 
 Inside the ConfigMap we define role mappings that allow EC2 nodes to authenticate with the cluster.
 
@@ -1549,7 +1686,7 @@ These permissions allow nodes to:
 
 ---
 
-# Step 64 — Ensuring Proper Deployment Order
+## 8. Ensuring Proper Deployment Order
 
 Since the cluster must exist before applying Kubernetes resources, we define an explicit dependency.
 
@@ -1563,7 +1700,7 @@ This ensures Terraform **waits until the EKS cluster is fully created** before a
 
 ---
 
-# Step 65 — Applying the Configuration
+## 9. Applying the Configuration
 
 Now we apply the configuration.
 
@@ -1579,7 +1716,7 @@ Terraform will now:
 
 ---
 
-# Step 66 — Verifying the ConfigMap
+## 10. Verifying the ConfigMap
 
 After the deployment we can verify the configuration using kubectl.
 
@@ -1597,8 +1734,7 @@ Inside the ConfigMap you should see the **role mapping for the worker nodes**.
 
 ---
 
-# Module 2 — Lesson 7  
-## Creating the First Managed Node Group
+# Lesson 7: Creating the First Managed Node Group
 
 Now that our **EKS control plane is running**, we can add the **first worker nodes to the cluster**.
 
@@ -1616,7 +1752,7 @@ Later we will explore more advanced approaches.
 
 ---
 
-# Step 67 — Defining Capacity Variables
+## 1. Defining Capacity Variables
 
 Before creating the node group, we will define some variables to control **cluster capacity**.
 
@@ -1646,7 +1782,7 @@ This allows us to define **multiple instance types** for the node group.
 
 ---
 
-# Step 68 — Configuring the Variables
+## 2. Configuring the Variables
 
 Now configure these variables inside **terraform.tfvars**.
 
@@ -1658,8 +1794,7 @@ auto_scale_options = {
 }
 
 nodes_instance_sizes = [
-  "t3.large",
-  "t3a.large",
+  "t3.micro"
 ]
 ```
 
@@ -1673,7 +1808,7 @@ Using multiple instance types allows AWS to select instances more flexibly.
 
 ---
 
-# Step 69 — Creating the EKS Node Group Resource
+## 3. Creating the EKS Node Group Resource
 
 Create a new file:
 
@@ -1686,13 +1821,13 @@ Now we create the node group using the **aws_eks_node_group** resource.
 ```hcl
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.id
-  node_group_name = aws_eks_cluster.main.id
+  node_group_name = "${var.project_name}-workers"
 
   node_role_arn = aws_iam_role.eks_nodes_role.arn
 
   instance_types = var.nodes_instance_sizes
 
-  subnet_ids = data.aws_ssm_parameter.private_subnets[*].value
+  subnet_ids = data.aws_ssm_parameter.pod_subnets[*].value
 
   tags = {
     "kubernetes.io/cluster/${var.project_name}" = "owned"
@@ -1706,7 +1841,7 @@ The **node role ARN** must be the same role previously authorized in the **aws-a
 
 ---
 
-# Step 70 — Configuring Node Scaling
+## 4. Configuring Node Scaling
 
 Next we configure the **scaling configuration**.
 
@@ -1724,25 +1859,25 @@ Terraform will initially create **two nodes**, but the cluster can scale up to *
 
 ---
 
-# Step 71 — Assigning Subnets
-
-The nodes must be launched inside the **private subnets used by the cluster**.
+## 5. Assigning Subnets
 
 ```hcl
-  subnet_ids = data.aws_ssm_parameter.private_subnets[*].value
+  subnet_ids = data.aws_ssm_parameter.pod_subnets[*].value
 ```
 
-These are the same subnets used during the cluster creation.
+> **Note:** Unlike the EKS cluster's `vpc_config`, which uses `private_subnets` for the control plane's ENIs, the worker nodes are launched inside the **pod subnets** instead. This keeps worker/pod IP allocation isolated from the private subnet range used by the control plane and other private resources.
 
 ---
 
-# Step 72 — Adding Node Labels
+## 6. Adding Node Labels
 
 Node labels can be applied to every node created in the group.
 
 ```hcl
   labels = {
-    "ingress/ready" = "true"
+    "capacity/os"   = "AMAZON_LINUX"
+    "capacity/arch" = "X86_64"
+    "capacity/type" = "ON_DEMAND"
   }
 ```
 
@@ -1756,7 +1891,7 @@ We will explore these strategies later.
 
 ---
 
-# Step 73 — Preventing Scaling Drift
+## 7. Preventing Scaling Drift
 
 If cluster autoscaling changes the desired size dynamically, Terraform could try to revert it.
 
@@ -1774,7 +1909,7 @@ This prevents Terraform from forcing the node group back to the original desired
 
 ---
 
-# Step 74 — Ensuring Correct Dependency Order
+## 8. Ensuring Correct Dependency Order
 
 The node group must only be created **after the aws-auth ConfigMap exists**, otherwise nodes will fail to join the cluster.
 
@@ -1788,7 +1923,7 @@ This guarantees the correct provisioning order.
 
 ---
 
-# Step 75 — Configuring Timeouts
+## 9. Configuring Timeouts
 
 For large clusters, node provisioning or updates can take time.
 
@@ -1806,7 +1941,7 @@ This is especially useful for **large node groups or production environments**.
 
 ---
 
-# Step 76 — Applying the Configuration
+## 10. Applying the Configuration
 
 Now apply the configuration.
 
@@ -1818,7 +1953,7 @@ Terraform will create the node group and launch the EC2 instances that will act 
 
 ---
 
-# Step 77 — Verifying the Nodes
+## 11. Verifying the Nodes
 
 After deployment, verify the nodes using kubectl.
 
@@ -1839,7 +1974,7 @@ This confirms that the **nodes successfully joined the cluster**.
 
 ---
 
-# Step 78 — Viewing the Node Group in AWS
+## 12. Viewing the Node Group in AWS
 
 You can also check the node group in the AWS console.
 
@@ -1853,7 +1988,7 @@ There you will see the newly created node group and its configuration.
 
 ---
 
-# Step 79 — Inspecting the EC2 Instances
+## 13. Inspecting the EC2 Instances
 
 The worker nodes are **regular EC2 instances** managed by the node group.
 
@@ -1871,8 +2006,7 @@ This allows secure access to the instances directly from the AWS console without
 
 ---
 
-# Module 2 — Lesson 8  
-## Migrating from aws-auth ConfigMap to Access Entries
+# Lesson 8: Migrating from aws-auth ConfigMap to Access Entries
 
 The **aws-auth ConfigMap** has historically been the most common way to manage authentication in Amazon EKS.
 
@@ -1886,7 +2020,7 @@ Access Entries allow us to manage **authentication and authorization for IAM ide
 
 ---
 
-# Step 80 — Understanding Access Entries
+## 1. Understanding Access Entries
 
 Access Entries provide a native way to authorize:
 
@@ -1907,11 +2041,11 @@ Compared to the aws-auth ConfigMap, Access Entries are:
 
 ---
 
-# Step 81 — Creating an Access Entry for Nodes
+## 2. Creating an Access Entry for Nodes
 
 Create a new file:
 
-```
+```txt
 access_entries.tf
 ```
 
@@ -1942,9 +2076,9 @@ Since our worker nodes are Linux EC2 instances, we use **EC2_LINUX**.
 
 ---
 
-# Step 82 — Ensuring Correct Dependency Order
+## 3. Updating the Node Group's Dependency Order
 
-We ensure the access entry is created only after the IAM role exists.
+With the access entry in place, go back to `nodes.tf` and update the node group's `depends_on` block so it waits for the access entry instead of the old aws-auth ConfigMap.
 
 ```hcl
   depends_on = [
@@ -1953,11 +2087,11 @@ We ensure the access entry is created only after the IAM role exists.
   ]
 ```
 
-This prevents Terraform from attempting to create the access entry before the role is available.
+The old ConfigMap dependency is kept as a comment for reference. This prevents Terraform from attempting to create the node group before the access entry is available.
 
 ---
 
-# Step 83 — Applying the Configuration
+## 4. Applying the Configuration
 
 Now apply the Terraform configuration.
 
@@ -1971,7 +2105,7 @@ At this point, the **EKS API now manages authentication**, instead of relying on
 
 ---
 
-# Step 84 — Removing the aws-auth ConfigMap
+## 5. Removing the aws-auth ConfigMap
 
 After confirming the Access Entry is working, the old aws-auth configuration can be removed.
 
@@ -1985,7 +2119,7 @@ Once removed, the cluster will rely entirely on **Access Entries** for authentic
 
 ---
 
-# Step 85 — Verifying Access Entries in AWS
+## 6. Verifying Access Entries in AWS
 
 You can check the new access configuration in the AWS console.
 
@@ -1999,7 +2133,7 @@ There you will see the **authorized roles and identities** managed through Acces
 
 ---
 
-# Step 86 — Testing the Node Authentication
+## 7. Testing the Node Authentication
 
 To confirm that Access Entries are working correctly, we can force the nodes to rejoin the cluster.
 
@@ -2017,8 +2151,7 @@ If the nodes successfully rejoin the cluster, the Access Entry configuration is 
 
 ---
 
-# Module 2 — Lesson 9  
-## Managing EKS Add-ons with Terraform
+# Lesson 9: Managing EKS Add-ons with Terraform
 
 Amazon EKS provides a feature called **Add-ons**, which allows AWS to manage important Kubernetes components for the cluster.
 
@@ -2041,14 +2174,15 @@ These components can also be managed through **Terraform**, allowing us to keep 
 
 ---
 
-# Step 87 — Choosing the Core Add-ons
+## 1. Choosing the Core Add-ons
 
-For this lesson we will manage three essential Kubernetes add-ons:
+For this lesson we will manage four essential Kubernetes add-ons:
 
 ```txt
 VPC CNI
 CoreDNS
 kube-proxy
+Pod Identity Agent
 ```
 
 These are fundamental components required for the cluster to operate.
@@ -2056,10 +2190,11 @@ These are fundamental components required for the cluster to operate.
 - **VPC CNI** handles networking between pods and the AWS VPC.
 - **CoreDNS** provides DNS resolution inside the cluster.
 - **kube-proxy** manages service networking rules on each node.
+- **Pod Identity Agent** allows pods to assume IAM roles without relying on the OIDC-based IAM Roles for Service Accounts (IRSA) mechanism.
 
 ---
 
-# Step 88 — Creating Variables for Add-on Versions
+## 2. Creating Variables for Add-on Versions
 
 To manage versions through Terraform, we create variables for each add-on.
 
@@ -2078,22 +2213,28 @@ variable "addon_kubeproxy_version" {
   type    = string
   default = "v1.34.3-eksbuild.5"
 }
+
+variable "addon_pod_identity_version" {
+  type    = string
+  default = "v1.3.4-eksbuild.1"
+}
 ```
 
 These variables allow us to easily upgrade or change versions when necessary.
 
 ---
 
-# Step 89 — Defining Versions in terraform.tfvars
+## 3. Defining Versions in terraform.tfvars
 
 Now we define the versions inside **terraform.tfvars**.
 
 Example configuration:
 
 ```txt
-addon_cni_version        = "v1.21.1-eksbuild.3"
-addon_coredns_version    = "v1.13.2-eksbuild.1"
-addon_kube_proxy_version = "v1.34.3-eksbuild.5"
+addon_cni_version          = "v1.21.1-eksbuild.3"
+addon_coredns_version      = "v1.13.2-eksbuild.1"
+addon_kubeproxy_version    = "v1.34.3-eksbuild.5"
+addon_pod_identity_version = "v1.3.4-eksbuild.1"
 ```
 
 You can obtain the latest versions directly from the **EKS console** when selecting an add-on.
@@ -2102,11 +2243,11 @@ AWS usually shows the **recommended version** for your cluster version.
 
 ---
 
-# Step 90 — Creating the VPC CNI Add-on
+## 4. Creating the VPC CNI Add-on
 
 Create a new file:
 
-```
+```txt
 addons.tf
 ```
 
@@ -2130,7 +2271,7 @@ The **resolve_conflicts** parameters ensure that Terraform overrides any conflic
 
 ---
 
-# Step 91 — Creating the CoreDNS Add-on
+## 5. Creating the CoreDNS Add-on
 
 Next we configure the **CoreDNS add-on**.
 
@@ -2152,7 +2293,7 @@ CoreDNS is responsible for **internal DNS resolution inside the Kubernetes clust
 
 ---
 
-# Step 92 — Creating the kube-proxy Add-on
+## 6. Creating the kube-proxy Add-on
 
 Now we configure **kube-proxy**.
 
@@ -2174,7 +2315,30 @@ kube-proxy manages **network rules and service routing** on every node.
 
 ---
 
-# Step 93 — Defining Dependencies
+## 7. Creating the Pod Identity Agent Add-on
+
+Finally, we configure the **Pod Identity Agent add-on**.
+
+```hcl
+resource "aws_eks_addon" "pod_identity" {
+  cluster_name = aws_eks_cluster.main.name
+  addon_name   = "eks-pod-identity-agent"
+
+  addon_version               = var.addon_pod_identity_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_access_entry.nodes
+  ]
+}
+```
+
+This add-on enables workloads to assume IAM roles through **EKS Pod Identity**, an alternative to IRSA that we will use in later modules.
+
+---
+
+## 8. Defining Dependencies
 
 We ensure the add-ons are installed **after the node group is available**.
 
@@ -2188,7 +2352,7 @@ This ensures that the cluster already has nodes available to run these component
 
 ---
 
-# Step 94 — Applying the Configuration
+## 9. Applying the Configuration
 
 Now apply the Terraform configuration.
 
@@ -2202,7 +2366,7 @@ AWS will then manage their lifecycle automatically.
 
 ---
 
-# Step 95 — Verifying the Add-ons
+## 10. Verifying the Add-ons
 
 You can verify the installation using kubectl.
 
@@ -2216,13 +2380,14 @@ You should see pods related to:
 coredns
 kube-proxy
 aws-node
+eks-pod-identity-agent
 ```
 
 These components will now be running in the **kube-system namespace**.
 
 ---
 
-# Step 96 — Viewing Add-ons in the AWS Console
+## 11. Viewing Add-ons in the AWS Console
 
 You can also verify the add-ons in the AWS console.
 
@@ -2236,8 +2401,7 @@ There you will see the installed add-ons and their versions.
 
 ---
 
-# Module 2 — Lesson 10  
-## Using the Helm Provider with Terraform
+# Lesson 10: Using the Helm Provider with Terraform
 
 The **Helm provider** is one of the most useful tools when managing Kubernetes clusters as **Infrastructure as Code**.
 
@@ -2257,7 +2421,7 @@ This allows us to fully automate the provisioning of a Kubernetes cluster **from
 
 ---
 
-# Step 97 — Configuring the Helm Provider
+## 1. Configuring the Helm Provider
 
 Before using Helm with Terraform, we must configure the **Helm provider**.
 
@@ -2285,7 +2449,7 @@ Terraform will download the Helm provider and prepare the environment.
 
 ---
 
-# Step 98 — Installing the Metrics Server
+## 2. Installing the Metrics Server
 
 One of the most common components installed in Kubernetes clusters is the **Metrics Server**.
 
@@ -2307,7 +2471,7 @@ Horizontal Pod Autoscaler (HPA)
 
 Create a new file:
 
-```
+```txt
 helm_metrics_server.tf
 ```
 
@@ -2344,7 +2508,7 @@ helm install metrics-server metrics-server/metrics-server
 
 ---
 
-# Step 99 — Applying the Configuration
+## 3. Applying the Configuration
 
 Now apply the Terraform configuration.
 
@@ -2356,7 +2520,7 @@ Terraform will download the Helm chart and deploy the Metrics Server into the cl
 
 ---
 
-# Step 100 — Verifying the Metrics Server
+## 4. Verifying the Metrics Server
 
 To confirm that the deployment worked, check the pods inside the **kube-system namespace**.
 
@@ -2374,7 +2538,7 @@ This means the Metrics Server is now running in the cluster.
 
 ---
 
-# Step 101 — Installing kube-state-metrics
+## 5. Installing kube-state-metrics
 
 Another very common component used for monitoring is **kube-state-metrics**.
 
@@ -2391,7 +2555,7 @@ replica counts
 
 Create a new file:
 
-```
+```txt
 helm_kube_state_metrics.tf
 ```
 
@@ -2435,7 +2599,7 @@ helm install kube-state-metrics prometheus-community/kube-state-metrics
 
 ---
 
-# Step 102 — Applying the Deployment
+## 6. Applying the Deployment
 
 Run Terraform again.
 
@@ -2447,7 +2611,7 @@ Terraform will install **kube-state-metrics** using Helm.
 
 ---
 
-# Step 103 — Verifying the Installation
+## 7. Verifying the Installation
 
 You can confirm that the service is running.
 
@@ -2466,7 +2630,7 @@ These services will expose metrics that can later be scraped by monitoring syste
 
 ---
 
-# Step 104 — Why Helm Is Important
+## 8. Why Helm Is Important
 
 Helm allows us to easily install and manage complex applications in Kubernetes.
 
@@ -2484,8 +2648,7 @@ Using Terraform with Helm makes it possible to **automate the full lifecycle of 
 
 ---
 
-# Module 2 — Lesson 11  
-## Deploying the First Application in the EKS Cluster
+# Lesson 11: Deploying the First Application in the EKS Cluster
 
 Now that our **EKS cluster is fully configured**, we can deploy our **first application** inside the cluster.
 
@@ -2504,13 +2667,13 @@ Horizontal Pod Autoscaler (HPA)
 
 ---
 
-# Step 105 — Creating the Application Manifest
+## 1. Creating the Application Manifest
 
 Create a file for the application deployment.
 
 Example file:
 
-```
+```txt
 assets/chip-first-deploy.yaml
 ```
 
@@ -2518,7 +2681,7 @@ Inside this file we define all the Kubernetes resources required for the applica
 
 ---
 
-# Step 106 — Creating the Namespace
+## 2. Creating the Namespace
 
 First we create a dedicated namespace for the application.
 
@@ -2533,7 +2696,7 @@ Namespaces help organize workloads and isolate resources inside the cluster.
 
 ---
 
-# Step 107 — Creating the Deployment
+## 3. Creating the Deployment
 
 Next we create a **Deployment** that will run the application.
 
@@ -2602,7 +2765,7 @@ This deployment will create **two pods running the application**.
 
 ---
 
-# Step 108 — Creating the Service
+## 4. Creating the Service
 
 Now we expose the deployment using a Kubernetes **Service**.
 
@@ -2629,7 +2792,7 @@ The service allows other resources in the cluster to communicate with the applic
 
 ---
 
-# Step 109 — Creating the Horizontal Pod Autoscaler
+## 5. Creating the Horizontal Pod Autoscaler
 
 We also configure a simple **Horizontal Pod Autoscaler (HPA)**.
 
@@ -2659,19 +2822,19 @@ The HPA monitors **CPU usage** and automatically scales the deployment when nece
 
 ---
 
-# Step 110 — Applying the Manifest
+## 6. Applying the Manifest
 
 Now apply the Kubernetes manifest.
 
 ```bash
-kubectl apply -f chip.yaml
+kubectl apply -f assets/chip-first-deploy.yaml
 ```
 
 Kubernetes will create all defined resources in the cluster.
 
 ---
 
-# Step 111 — Verifying the Deployment
+## 7. Verifying the Deployment
 
 Check the pods running in the new namespace.
 
@@ -2681,7 +2844,7 @@ kubectl get pods -n chip
 
 ---
 
-# Step 112 — Checking the Service
+## 8. Checking the Service
 
 You can also verify the service.
 
@@ -2693,7 +2856,7 @@ This confirms the application is accessible inside the cluster.
 
 ---
 
-# Step 113 — Checking the Autoscaler
+## 9. Checking the Autoscaler
 
 To verify the HPA configuration:
 
@@ -2705,12 +2868,12 @@ The autoscaler will monitor CPU usage and scale the application between:
 
 ```bash
 2 pods (minimum)
-5 pods (maximum)
+6 pods (maximum)
 ```
 
 ---
 
-# Result
+## Result
 
 We successfully deployed our **first application inside the EKS cluster**.
 
@@ -2727,7 +2890,7 @@ This confirms that our cluster is fully functional and ready to run workloads.
 
 ---
 
-# Conclusion of the Vanilla Cluster
+## Conclusion of the Vanilla Cluster
 
 At this stage we built a **fully functional EKS cluster from scratch using Terraform**.
 
