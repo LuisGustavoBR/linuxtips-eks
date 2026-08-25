@@ -1,7 +1,8 @@
-# Module 5 - Lesson 1
-## Introduction to Karpenter
+# Module 5: Autoscaling with Karpenter
 
-In this lesson we introduce **Karpenter**, one of the most powerful autoscaling solutions available for Kubernetes on AWS.
+## Overview
+
+In this module we introduce **Karpenter**, one of the most powerful autoscaling solutions available for Kubernetes on AWS.
 
 Previously we explored:
 
@@ -22,9 +23,93 @@ Greater workload flexibility
 
 Karpenter is currently one of the most recommended approaches for scaling EKS clusters in AWS.
 
+## Table of Contents
+
+- [Lesson 1: Introduction to Karpenter](#lesson-1-introduction-to-karpenter)
+  - [1. What is Karpenter?](#1-what-is-karpenter)
+  - [2. Karpenter vs Cluster Autoscaler](#2-karpenter-vs-cluster-autoscaler)
+  - [3. Why Karpenter Is More Efficient](#3-why-karpenter-is-more-efficient)
+  - [4. Main Karpenter Components](#4-main-karpenter-components)
+  - [5. Understanding EC2NodeClass](#5-understanding-ec2nodeclass)
+  - [6. Understanding NodePools](#6-understanding-nodepools)
+  - [7. EC2NodeClass vs NodePool](#7-ec2nodeclass-vs-nodepool)
+  - [8. Flexible Capacity Management](#8-flexible-capacity-management)
+  - [9. Advanced Scheduling Strategies](#9-advanced-scheduling-strategies)
+  - [10. Faster Node Provisioning](#10-faster-node-provisioning)
+  - [11. Cost Optimization](#11-cost-optimization)
+  - [12. Spot Workloads with Karpenter](#12-spot-workloads-with-karpenter)
+  - [13. Real Production Use Cases](#13-real-production-use-cases)
+  - [14. Productizing Karpenter](#14-productizing-karpenter)
+  - [15. Additional Learning Resources](#15-additional-learning-resources)
+  - [16. What We Will Build](#16-what-we-will-build)
+- [Lesson 2: Installing Karpenter on EKS](#lesson-2-installing-karpenter-on-eks)
+  - [1. Starting from a Vanilla Cluster](#1-starting-from-a-vanilla-cluster)
+  - [2. Creating the Karpenter IAM Resources](#2-creating-the-karpenter-iam-resources)
+  - [3. Required Permissions](#3-required-permissions)
+  - [4. Understanding SQS Permissions](#4-understanding-sqs-permissions)
+  - [5. Creating the IAM Role](#5-creating-the-iam-role)
+  - [6. Applying the IAM Configuration](#6-applying-the-iam-configuration)
+  - [7. Installing Karpenter with Helm](#7-installing-karpenter-with-helm)
+  - [8. Using the Official Repository](#8-using-the-official-repository)
+  - [9. Configuring IRSA](#9-configuring-irsa)
+  - [10. Required Helm Parameters](#10-required-helm-parameters)
+    - [Cluster Name](#cluster-name)
+    - [Cluster Endpoint](#cluster-endpoint)
+    - [Instance Profile](#instance-profile)
+  - [11. Understanding the Instance Profile](#11-understanding-the-instance-profile)
+  - [12. Deploying Karpenter](#12-deploying-karpenter)
+  - [13. Verifying the Installation](#13-verifying-the-installation)
+  - [14. Monitoring Karpenter Logs](#14-monitoring-karpenter-logs)
+  - [15. What Has Been Installed?](#15-what-has-been-installed)
+  - [Key Takeaways](#key-takeaways)
+- [Lesson 3: Understanding NodePools and EC2NodeClasses in Karpenter](#lesson-3-understanding-nodepools-and-ec2nodeclasses-in-karpenter)
+  - [1. Creating an EC2NodeClass](#1-creating-an-ec2nodeclass)
+  - [2. Understanding Each EC2NodeClass Setting](#2-understanding-each-ec2nodeclass-setting)
+    - [AMI Family](#ami-family)
+    - [Instance Profile](#instance-profile-1)
+    - [Subnets](#subnets)
+    - [Security Groups](#security-groups)
+    - [AMI Selection](#ami-selection)
+  - [3. Creating a NodePool](#3-creating-a-nodepool)
+  - [4. Defining Instance Families](#4-defining-instance-families)
+  - [5. Choosing Spot or On-Demand](#5-choosing-spot-or-on-demand)
+  - [6. Understanding Consolidation](#6-understanding-consolidation)
+  - [7. Applying the Configuration](#7-applying-the-configuration)
+  - [8. Deploying a Test Application](#8-deploying-a-test-application)
+  - [9. Triggering Node Provisioning](#9-triggering-node-provisioning)
+  - [10. Watching Karpenter Create Nodes](#10-watching-karpenter-create-nodes)
+  - [11. Scaling Back Down](#11-scaling-back-down)
+  - [12. Watching Consolidation in Action](#12-watching-consolidation-in-action)
+  - [13. Why Karpenter Is More Powerful Than Cluster Autoscaler](#13-why-karpenter-is-more-powerful-than-cluster-autoscaler)
+  - [14. What We Will Improve Next](#14-what-we-will-improve-next)
+- [Lesson 4: Automating Karpenter NodePools with Terraform](#lesson-4-automating-karpenter-nodepools-with-terraform)
+  - [1. Installing the Kubectl Manifest Provider](#1-installing-the-kubectl-manifest-provider)
+  - [2. Defining the Capacity Configuration](#2-defining-the-capacity-configuration)
+  - [3. Creating the Capacity Object](#3-creating-the-capacity-object)
+  - [4. Retrieving the Latest AMI Automatically](#4-retrieving-the-latest-ami-automatically)
+  - [5. Creating Template Files](#5-creating-template-files)
+  - [6. Building the EC2NodeClass Template](#6-building-the-ec2nodeclass-template)
+  - [7. Handling Dynamic Subnets](#7-handling-dynamic-subnets)
+  - [8. Creating the EC2NodeClass Resource](#8-creating-the-ec2nodeclass-resource)
+  - [9. Validating the EC2NodeClass](#9-validating-the-ec2nodeclass)
+  - [10. Building the NodePool Template](#10-building-the-nodepool-template)
+  - [11. Generating Instance Families](#11-generating-instance-families)
+  - [12. Generating Instance Sizes](#12-generating-instance-sizes)
+  - [13. Generating Capacity Types](#13-generating-capacity-types)
+  - [14. Generating Availability Zones](#14-generating-availability-zones)
+  - [15. Creating Dynamic Workload Labels](#15-creating-dynamic-workload-labels)
+  - [16. Creating the NodePool Resource](#16-creating-the-nodepool-resource)
+  - [17. Applying the Configuration](#17-applying-the-configuration)
+  - [18. Benefits of This Approach](#18-benefits-of-this-approach)
+  - [19. Preparing for Workload Segregation](#19-preparing-for-workload-segregation)
+
 ---
 
-# Step 1 - What is Karpenter?
+# Lesson 1: Introduction to Karpenter
+
+---
+
+## 1. What is Karpenter?
 
 Karpenter is an open-source node autoscaling solution originally created by AWS.
 
@@ -42,7 +127,7 @@ Instead, it analyzes pending workloads and creates infrastructure that best fits
 
 ---
 
-# Step 2 - Karpenter vs Cluster Autoscaler
+## 2. Karpenter vs Cluster Autoscaler
 
 Cluster Autoscaler works primarily by:
 
@@ -69,7 +154,7 @@ This allows Karpenter to make smarter infrastructure decisions.
 
 ---
 
-# Step 3 - Why Karpenter Is More Efficient
+## 3. Why Karpenter Is More Efficient
 
 When a pod becomes pending, Karpenter evaluates the workload requirements before provisioning capacity.
 
@@ -95,7 +180,7 @@ Better resource utilization
 
 ---
 
-# Step 4 - Main Karpenter Components
+## 4. Main Karpenter Components
 
 Karpenter relies on a small set of Custom Resource Definitions (CRDs).
 
@@ -110,7 +195,7 @@ These CRDs define how infrastructure should be provisioned.
 
 ---
 
-# Step 5 - Understanding EC2NodeClass
+## 5. Understanding EC2NodeClass
 
 The EC2NodeClass defines the infrastructure template that Karpenter will use.
 
@@ -134,7 +219,7 @@ Everything related to the EC2 instance itself is defined here.
 
 ---
 
-# Step 6 - Understanding NodePools
+## 6. Understanding NodePools
 
 The NodePool defines how Karpenter should provision and manage capacity.
 
@@ -152,7 +237,7 @@ This is where we define the behavior of the autoscaling strategy.
 
 ---
 
-# Step 7 - EC2NodeClass vs NodePool
+## 7. EC2NodeClass vs NodePool
 
 A simple way to think about the relationship is:
 
@@ -180,7 +265,7 @@ NodePool
 
 ---
 
-# Step 8 - Flexible Capacity Management
+## 8. Flexible Capacity Management
 
 One of Karpenter's biggest advantages is flexibility.
 
@@ -199,7 +284,7 @@ Each workload can have its own scaling strategy.
 
 ---
 
-# Step 9 - Advanced Scheduling Strategies
+## 9. Advanced Scheduling Strategies
 
 Karpenter allows much more granular control over infrastructure.
 
@@ -217,7 +302,7 @@ This enables workload segregation without creating multiple managed node groups.
 
 ---
 
-# Step 10 - Faster Node Provisioning
+## 10. Faster Node Provisioning
 
 Karpenter is generally faster than Cluster Autoscaler.
 
@@ -233,7 +318,7 @@ Instead of scaling an existing node group, Karpenter provisions the exact infras
 
 ---
 
-# Step 11 - Cost Optimization
+## 11. Cost Optimization
 
 One of Karpenter's strongest features is cost optimization.
 
@@ -252,7 +337,7 @@ This often results in significant savings.
 
 ---
 
-# Step 12 - Spot Workloads with Karpenter
+## 12. Spot Workloads with Karpenter
 
 Karpenter is especially powerful when combined with Spot Instances.
 
@@ -269,7 +354,7 @@ Many production environments run large percentages of Spot capacity using Karpen
 
 ---
 
-# Step 13 - Real Production Use Cases
+## 13. Real Production Use Cases
 
 Common Karpenter use cases include:
 
@@ -284,7 +369,7 @@ It is widely adopted because it adapts infrastructure dynamically to workload de
 
 ---
 
-# Step 14 - Productizing Karpenter
+## 14. Productizing Karpenter
 
 One of the goals of this module is to make Karpenter easy to consume.
 
@@ -301,7 +386,7 @@ The objective is to reduce operational complexity while preserving flexibility.
 
 ---
 
-# Step 15 - Additional Learning Resources
+## 15. Additional Learning Resources
 
 The course materials include an additional article covering:
 
@@ -317,7 +402,7 @@ It is strongly recommended reading material.
 
 ---
 
-# Step 16 - What We Will Build
+## 16. What We Will Build
 
 Throughout this module we will:
 
@@ -334,8 +419,7 @@ By the end of the module, you will have a complete understanding of how to use K
 
 ---
 
-# Module 5 - Lesson 2
-## Installing Karpenter on EKS
+# Lesson 2: Installing Karpenter on EKS
 
 In this lesson we will install **Karpenter** in our EKS cluster.
 
@@ -354,7 +438,7 @@ We will configure NodePools and EC2NodeClasses in the next lessons.
 
 ---
 
-# Step 17 - Starting from a Vanilla Cluster
+## 1. Starting from a Vanilla Cluster
 
 To simplify the setup, we will use a clean EKS cluster.
 
@@ -371,7 +455,7 @@ This allows us to understand exactly what Karpenter requires to operate.
 
 ---
 
-# Step 18 - Creating the Karpenter IAM Resources
+## 2. Creating the Karpenter IAM Resources
 
 The first requirement is creating the IAM resources used by Karpenter.
 
@@ -441,12 +525,8 @@ resource "aws_iam_policy" "karpenter" {
   policy = data.aws_iam_policy_document.karpenter_policy.json
 }
 
-resource "aws_iam_policy_attachment" "karpenter" {
-  name = "karpenter"
-  roles = [
-    aws_iam_role.karpenter.name
-  ]
-
+resource "aws_iam_role_policy_attachment" "karpenter" {
+  role       = aws_iam_role.karpenter.name
   policy_arn = aws_iam_policy.karpenter.arn
 }
 ```
@@ -463,7 +543,7 @@ These resources will allow Karpenter to interact with AWS services.
 
 ---
 
-# Step 19 - Required Permissions
+## 3. Required Permissions
 
 Karpenter needs permissions to manage infrastructure dynamically.
 
@@ -482,7 +562,7 @@ These permissions allow Karpenter to provision and manage capacity automatically
 
 ---
 
-# Step 20 - Understanding SQS Permissions
+## 4. Understanding SQS Permissions
 
 One interesting permission is SQS access.
 
@@ -506,11 +586,11 @@ Reschedule workloads
 Replace capacity automatically
 ```
 
-Without requiring an additional Node Termination Handler deployment.
+> **Note:** the `sqs:*` IAM permission is a prerequisite, not the full mechanism. To actually receive interruption events, Karpenter also needs a dedicated SQS queue plus EventBridge rules forwarding Spot interruption, rebalance-recommendation, and instance state-change notifications to it, along with the `settings.interruptionQueue` Helm value pointing at that queue. None of that infrastructure is created in this lesson, so interruption handling is not yet functional at this point in the course — it's covered by the IAM permission here so it's ready when that queue/EventBridge setup is added.
 
 ---
 
-# Step 21 - Creating the IAM Role
+## 5. Creating the IAM Role
 
 Create an IAM Role for Karpenter.
 
@@ -532,7 +612,7 @@ This is the same authentication model used throughout previous lessons.
 
 ---
 
-# Step 22 - Applying the IAM Configuration
+## 6. Applying the IAM Configuration
 
 Deploy the IAM resources:
 
@@ -544,7 +624,7 @@ After the deployment completes, Karpenter will have the permissions required to 
 
 ---
 
-# Step 23 - Installing Karpenter with Helm
+## 7. Installing Karpenter with Helm
 
 Now we can install Karpenter itself.
 
@@ -578,11 +658,6 @@ resource "helm_release" "karpenter" {
     {
       name  = "settings.clusterEndpoint"
       value = aws_eks_cluster.main.endpoint
-    },
-
-    {
-      name  = "aws.defaultInstanceProfile"
-      value = aws_iam_instance_profile.nodes.name
     }
   ]
 
@@ -605,7 +680,7 @@ IRSA Annotation
 
 ---
 
-# Step 24 - Using the Official Repository
+## 8. Using the Official Repository
 
 Karpenter is installed directly from the official AWS repository.
 
@@ -624,7 +699,7 @@ Version used in the course:
 
 ---
 
-# Step 25 - Configuring IRSA
+## 9. Configuring IRSA
 
 Because we are still using IRSA, we must annotate the service account.
 
@@ -640,7 +715,7 @@ This allows Karpenter to authenticate securely against AWS APIs without static c
 
 ---
 
-# Step 26 - Required Helm Parameters
+## 10. Required Helm Parameters
 
 Some parameters are mandatory during installation.
 
@@ -662,15 +737,11 @@ Allows communication with the Kubernetes API.
 
 ### Instance Profile
 
-```txt
-defaultInstanceProfile
-```
-
-Defines the IAM Instance Profile that new EC2 nodes will receive.
+Unlike `clusterName` and `clusterEndpoint`, the instance profile is **not** a Helm chart value in current Karpenter versions — the `aws.defaultInstanceProfile` setting was removed from the chart in earlier Karpenter releases. Instead, it is configured directly on each `EC2NodeClass` resource via the `instanceProfile` field, as shown in Lesson 3.
 
 ---
 
-# Step 27 - Understanding the Instance Profile
+## 11. Understanding the Instance Profile
 
 This configuration is very important.
 
@@ -692,11 +763,13 @@ EC2 receives Instance Profile
 Node joins EKS cluster
 ```
 
-Without this configuration, nodes would be created but could not register in Kubernetes.
+Without an instance profile, nodes would be created but could not register in Kubernetes.
+
+Unlike earlier Karpenter versions, this is no longer configured at the Helm chart level — it is defined per `EC2NodeClass`, which we will do in Lesson 3.
 
 ---
 
-# Step 28 - Deploying Karpenter
+## 12. Deploying Karpenter
 
 Apply the Helm release:
 
@@ -715,7 +788,7 @@ Configure IRSA
 
 ---
 
-# Step 29 - Verifying the Installation
+## 13. Verifying the Installation
 
 Update kubeconfig:
 
@@ -738,7 +811,7 @@ Pods in Running state
 
 ---
 
-# Step 30 - Monitoring Karpenter Logs
+## 14. Monitoring Karpenter Logs
 
 It is useful to keep the logs open while configuring NodePools later.
 
@@ -764,7 +837,7 @@ This makes troubleshooting much easier during provisioning tests.
 
 ---
 
-# Step 31 - What Has Been Installed?
+## 15. What Has Been Installed?
 
 At this point we have:
 
@@ -789,7 +862,7 @@ Karpenter is installed, but it does not yet know how to create nodes.
 
 ---
 
-# Step 32 - Key Takeaways
+## Key Takeaways
 
 In this lesson we completed the Karpenter installation.
 
@@ -822,8 +895,7 @@ These resources are the foundation of Karpenter's autoscaling behavior.
 
 ---
 
-# Module 5 - Lesson 3
-## Understanding NodePools and EC2NodeClasses in Karpenter
+# Lesson 3: Understanding NodePools and EC2NodeClasses in Karpenter
 
 Now that Karpenter is installed in the cluster, we can start configuring how it will provision and manage EC2 instances.
 
@@ -854,7 +926,7 @@ The combination of both resources tells Karpenter everything it needs to know to
 
 ---
 
-# Step 33 - Creating an EC2NodeClass
+## 1. Creating an EC2NodeClass
 
 The EC2NodeClass defines the infrastructure configuration that Karpenter will use when creating nodes.
 
@@ -892,53 +964,11 @@ spec:
   - id: subnet-0091a3edd1fc94df2
   - id: subnet-0df064a0ae575582b
   - id: subnet-027f0c1ec495abba6
----
-apiVersion: karpenter.sh/v1
-kind: NodePool
-metadata:
-  name: linuxtips
-spec:
-  disruption:
-    consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 2m
-  template:
-    metadata:
-      labels:
-        workload: "etc"  
-    spec:
-      requirements:
-        - key: karpenter.k8s.aws/instance-family
-          operator: In
-          values:   
-          - t3
-          - t3a
-
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values:
-          - "spot"
-
-        - key: karpenter.k8s.aws/instance-size
-          operator: In
-          values:
-          - large
-    
-        - key: "topology.kubernetes.io/zone" 
-          operator: In
-          values:
-          - "us-east-1a"
-          - "us-east-1b"
-          - "us-east-1c"          
-          
-      nodeClassRef:
-        group: karpenter.k8s.aws
-        kind: EC2NodeClass
-        name: linuxtips
 ```
 
 ---
 
-# Step 34 - Understanding Each EC2NodeClass Setting
+## 2. Understanding Each EC2NodeClass Setting
 
 Let's understand what each field controls.
 
@@ -958,7 +988,8 @@ Available options include:
 AL2
 AL2023
 Bottlerocket
-Windows
+Windows2019
+Windows2022
 Custom
 ```
 
@@ -1031,7 +1062,7 @@ A simple approach is to reuse the AMI currently used by your EKS node groups.
 
 ---
 
-# Step 35 - Creating a NodePool
+## 3. Creating a NodePool
 
 With the infrastructure definition ready, we can create a NodePool.
 
@@ -1040,21 +1071,6 @@ The NodePool defines the provisioning rules that Karpenter will follow.
 Add the following resource to the same file.
 
 ```yaml
-apiVersion: karpenter.k8s.aws/v1
-kind: EC2NodeClass
-metadata:
-  name: linuxtips
-spec:
-  instanceProfile: "linuxtips-eks-cluster"
-  amiFamily: "AL2023"
-  amiSelectorTerms:
-  - id: ami-094fb6db0f574f0d6
-  securityGroupSelectorTerms:
-  - id: sg-0bb94cbd741aa3105
-  subnetSelectorTerms:
-  - id: subnet-0091a3edd1fc94df2
-  - id: subnet-0df064a0ae575582b
-  - id: subnet-027f0c1ec495abba6
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -1101,7 +1117,7 @@ spec:
 
 ---
 
-# Step 36 - Defining Instance Families
+## 4. Defining Instance Families
 
 One of the biggest advantages of Karpenter is controlling exactly which EC2 families can be used.
 
@@ -1141,7 +1157,7 @@ This flexibility allows Karpenter to optimize both cost and availability.
 
 ---
 
-# Step 37 - Choosing Spot or On-Demand
+## 5. Choosing Spot or On-Demand
 
 The capacity type controls how instances are purchased.
 
@@ -1177,7 +1193,7 @@ to reduce infrastructure costs.
 
 ---
 
-# Step 38 - Understanding Consolidation
+## 6. Understanding Consolidation
 
 One of Karpenter's most powerful features is node consolidation.
 
@@ -1210,7 +1226,7 @@ WhenEmptyOrUnderutilized
 
 ---
 
-# Step 39 - Applying the Configuration
+## 7. Applying the Configuration
 
 Deploy the NodeClass and NodePool.
 
@@ -1237,7 +1253,7 @@ At this point Karpenter is ready to provision nodes.
 
 ---
 
-# Step 40 - Deploying a Test Application
+## 8. Deploying a Test Application
 
 To test Karpenter we will use the same `chip` application from previous lessons.
 
@@ -1372,7 +1388,7 @@ Because the cluster already has available capacity, Karpenter will not create ad
 
 ---
 
-# Step 41 - Triggering Node Provisioning
+## 9. Triggering Node Provisioning
 
 Now let's force a large scale event.
 
@@ -1396,7 +1412,7 @@ Instead of simply adding more nodes, Karpenter calculates the most efficient inf
 
 ---
 
-# Step 42 - Watching Karpenter Create Nodes
+## 10. Watching Karpenter Create Nodes
 
 Monitor the logs:
 
@@ -1433,7 +1449,7 @@ while automatically provisioning all required compute capacity.
 
 ---
 
-# Step 43 - Scaling Back Down
+## 11. Scaling Back Down
 
 Now reduce the workload.
 
@@ -1453,7 +1469,7 @@ Based on the consolidation policy, Karpenter will start removing them automatica
 
 ---
 
-# Step 44 - Watching Consolidation in Action
+## 12. Watching Consolidation in Action
 
 Since we configured:
 
@@ -1475,7 +1491,7 @@ This process happens automatically and safely.
 
 ---
 
-# Step 45 - Why Karpenter Is More Powerful Than Cluster Autoscaler
+## 13. Why Karpenter Is More Powerful Than Cluster Autoscaler
 
 Cluster Autoscaler focuses primarily on adding nodes when pods are pending.
 
@@ -1506,7 +1522,7 @@ This is why it has become the preferred autoscaling solution for modern EKS envi
 
 ---
 
-# Step 46 - What We Will Improve Next
+## 14. What We Will Improve Next
 
 The current configuration works, but it still contains several hardcoded values:
 
@@ -1523,8 +1539,7 @@ This is where we start moving from a proof of concept into a production-ready im
 
 ---
 
-# Module 5 - Lesson 4
-## Automating Karpenter NodePools with Terraform
+# Lesson 4: Automating Karpenter NodePools with Terraform
 
 So far, we have been creating our `EC2NodeClass` and `NodePool` resources manually.
 
@@ -1548,7 +1563,7 @@ By the end of this lesson, Karpenter resources will be fully generated from Terr
 
 ---
 
-# Step 47 - Installing the Kubectl Manifest Provider
+## 1. Installing the Kubectl Manifest Provider
 
 To apply Kubernetes manifests directly from Terraform, we will use the `kubectl_manifest` provider.
 
@@ -1583,6 +1598,8 @@ terraform {
 }
 ```
 
+> **Note:** `gavinbunney/kubectl` is a real, functioning provider, but it has seen little maintenance in recent years. Many current setups use the `alekc/kubectl` fork instead, which offers the same `kubectl_manifest`/`yaml_body` API and is actively maintained.
+
 After adding the provider configuration, run:
 
 ```bash
@@ -1593,7 +1610,7 @@ Terraform will download the required provider and make it available for use.
 
 ---
 
-# Step 48 - Defining the Capacity Configuration
+## 2. Defining the Capacity Configuration
 
 Before generating manifests dynamically, we need a structure that describes our desired capacity.
 
@@ -1631,7 +1648,7 @@ Availability Zones
 
 ---
 
-# Step 49 - Creating the Capacity Object
+## 3. Creating the Capacity Object
 
 A single entry in the list might look like:
 
@@ -1641,6 +1658,7 @@ karpenter_capacity = [
     name               = "linux-apps"
     workload           = "linux"
     ami_family         = "AL2023"
+    ami_ssm            = "/aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/image_id"
 
     instance_family    = ["t3a"]
     instance_sizes     = ["large"]
@@ -1665,7 +1683,7 @@ NodePool
 
 ---
 
-# Step 50 - Retrieving the Latest AMI Automatically
+## 4. Retrieving the Latest AMI Automatically
 
 Hardcoding AMI IDs is not a good practice.
 
@@ -1694,7 +1712,7 @@ More automation
 
 ---
 
-# Step 51 - Creating Template Files
+## 5. Creating Template Files
 
 Instead of embedding large YAML documents inside Terraform resources, we will use template files.
 
@@ -1716,7 +1734,7 @@ These files will contain the YAML templates used to generate the Karpenter resou
 
 ---
 
-# Step 52 - Building the EC2NodeClass Template
+## 6. Building the EC2NodeClass Template
 
 The first template is the EC2NodeClass.
 
@@ -1737,13 +1755,16 @@ spec:
 
   amiSelectorTerms:
     - id: ${ami_id}
+
+  securityGroupSelectorTerms:
+    - id: ${security_group}
 ```
 
 Terraform will replace these placeholders automatically during execution.
 
 ---
 
-# Step 53 - Handling Dynamic Subnets
+## 7. Handling Dynamic Subnets
 
 Subnets are stored as a list.
 
@@ -1764,7 +1785,7 @@ This allows the same template to work for any environment.
 
 ---
 
-# Step 54 - Creating the EC2NodeClass Resource
+## 8. Creating the EC2NodeClass Resource
 
 Now we can connect the template to Terraform.
 
@@ -1792,7 +1813,7 @@ At this point Terraform can generate EC2NodeClasses dynamically.
 
 ---
 
-# Step 55 - Validating the EC2NodeClass
+## 9. Validating the EC2NodeClass
 
 Apply the configuration:
 
@@ -1816,7 +1837,7 @@ The resource is now being managed entirely through Terraform.
 
 ---
 
-# Step 56 - Building the NodePool Template
+## 10. Building the NodePool Template
 
 The NodePool template is slightly more complex because it contains multiple lists.
 
@@ -1833,7 +1854,7 @@ Each of these values must be rendered dynamically.
 
 ---
 
-# Step 57 - Generating Instance Families
+## 11. Generating Instance Families
 
 Inside the template:
 
@@ -1862,7 +1883,7 @@ values:
 
 ---
 
-# Step 58 - Generating Instance Sizes
+## 12. Generating Instance Sizes
 
 The same technique applies to instance sizes.
 
@@ -1887,7 +1908,7 @@ values:
 
 ---
 
-# Step 59 - Generating Capacity Types
+## 13. Generating Capacity Types
 
 Capacity type can also be generated dynamically.
 
@@ -1913,7 +1934,26 @@ or both.
 
 ---
 
-# Step 60 - Creating Dynamic Workload Labels
+## 14. Generating Availability Zones
+
+Availability zones follow the same dynamic-list pattern as instance families, sizes, and capacity types.
+
+Template:
+
+```yaml
+- key: "topology.kubernetes.io/zone"
+  operator: In
+  values:
+%{ for zone in availability_zones ~}
+    - ${zone}
+%{ endfor ~}
+```
+
+This ensures nodes are only created in the availability zones we explicitly allow, matching the manual example from Lesson 3.
+
+---
+
+## 15. Creating Dynamic Workload Labels
 
 We can also generate labels automatically.
 
@@ -1937,7 +1977,7 @@ workload=ml
 
 ---
 
-# Step 61 - Creating the NodePool Resource
+## 16. Creating the NodePool Resource
 
 Once the template is ready, create the Terraform resource.
 
@@ -1963,7 +2003,7 @@ resource "kubectl_manifest" "node_pool" {
 
 ---
 
-# Step 62 - Applying the Configuration
+## 17. Applying the Configuration
 
 Run:
 
@@ -1989,7 +2029,7 @@ kubectl get nodepools
 
 ---
 
-# Step 63 - Benefits of This Approach
+## 18. Benefits of This Approach
 
 Instead of creating YAML files manually, everything is now driven by Terraform variables.
 
@@ -2016,7 +2056,7 @@ without duplicating code.
 
 ---
 
-# Step 64 - Preparing for Workload Segregation
+## 19. Preparing for Workload Segregation
 
 At this point we have automated the entire Karpenter provisioning process.
 
