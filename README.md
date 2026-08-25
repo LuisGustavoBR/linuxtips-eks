@@ -26,11 +26,11 @@ This repository follows a modular structure covering:
 
 Everything is built using Infrastructure as Code and production best practices.
 
-## Contents
+## Table of Contents
 
 The repository is organized into modules, each focused on a specific EKS topic.
 
-### Module 1: EKS Fundamentals and Networking Foundation
+### [Module 1: EKS Fundamentals and Networking Foundation](./01%20-%20EKS%20Fundamentals%20and%20Networking%20Foundation/README.md)
 
 - Introduction to EKS  
 - Usage models  
@@ -42,7 +42,7 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Database subnets and NACLs  
 - Parameter Store integration  
 
-### Module 2: Control Plane and Cluster Setup
+### [Module 2: Control Plane and Cluster Setup](./02%20-%20Control%20Plane%20and%20Cluster%20Setup/README.md)
 
 - Initial cluster setup  
 - IAM roles and KMS  
@@ -56,7 +56,7 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Helm provider setup  
 - First Kubernetes deployment  
 
-### Module 3: Advanced Node Groups Strategies
+### [Module 3: Advanced Node Groups Strategies](./03%20-%20Advanced%20Node%20Groups%20Strategies/README.md)
 
 - On-Demand and Spot Node Groups  
 - Bottlerocket nodes  
@@ -68,7 +68,7 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Cluster Autoscaler  
 - Node Termination Handler  
 
-### Module 4: AWS Fargate
+### [Module 4: AWS Fargate](./04%20-%20AWS%20Fargate/README.md)
 
 - Fargate fundamentals and Firecracker  
 - Fargate profiles  
@@ -78,7 +78,7 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Application deployment on Fargate  
 - Cloud Native deployment strategies  
 
-### Module 5: Autoscaling with Karpenter (Part 1)
+### [Module 5: Autoscaling with Karpenter (Part 1)](./05%20-%20Autoscaling%20with%20Karpenter/README.md)
 
 - Introduction to Karpenter  
 - Helm installation  
