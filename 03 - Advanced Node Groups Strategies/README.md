@@ -1,5 +1,6 @@
-# Module 3 - Lesson 1  
-## Advanced Node Group Strategies in Amazon EKS
+# Module 3: Advanced Node Groups Strategies
+
+## Overview
 
 In the previous module we created our **first EKS cluster** and deployed a simple application.
 
@@ -7,9 +8,113 @@ The goal of that lesson was to **quickly provision a working Kubernetes cluster*
 
 Now we will go deeper into **node group strategies**, exploring how to design node groups for different workloads and infrastructure requirements.
 
+## Table of Contents
+
+- [Lesson 1: Advanced Node Group Strategies in Amazon EKS](#lesson-1-advanced-node-group-strategies-in-amazon-eks)
+  - [1. Understanding Node Groups](#1-understanding-node-groups)
+  - [2. Reviewing the Previous Node Group](#2-reviewing-the-previous-node-group)
+  - [3. Defining Capacity Type](#3-defining-capacity-type)
+  - [4. Adding Node Labels](#4-adding-node-labels)
+  - [5. Deploying the Node Group](#5-deploying-the-node-group)
+  - [6. Creating a Spot Node Group](#6-creating-a-spot-node-group)
+  - [7. Deploying the Spot Node Group](#7-deploying-the-spot-node-group)
+  - [8. Verifying the Node Groups](#8-verifying-the-node-groups)
+- [Lesson 2: Using Managed Node Groups with Bottlerocket](#lesson-2-using-managed-node-groups-with-bottlerocket)
+  - [1. Understanding What Bottlerocket Is](#1-understanding-what-bottlerocket-is)
+  - [2. Why Use Bottlerocket in EKS](#2-why-use-bottlerocket-in-eks)
+  - [3. Creating a Managed Node Group with Bottlerocket](#3-creating-a-managed-node-group-with-bottlerocket)
+  - [4. Creating the Bottlerocket Node Group File](#4-creating-the-bottlerocket-node-group-file)
+  - [5. Applying the Configuration](#5-applying-the-configuration)
+  - [6. Checking the Nodes in AWS Console](#6-checking-the-nodes-in-aws-console)
+  - [7. Connecting to the Nodes](#7-connecting-to-the-nodes)
+  - [8. Creating a Bottlerocket Node Group Using Spot Instances](#8-creating-a-bottlerocket-node-group-using-spot-instances)
+  - [9. Checking Node Labels](#9-checking-node-labels)
+- [Lesson 3: Using Graviton (ARM64) Instances in EKS](#lesson-3-using-graviton-arm64-instances-in-eks)
+  - [1. Understanding What Graviton Is](#1-understanding-what-graviton-is)
+  - [2. Benefits of Using Graviton](#2-benefits-of-using-graviton)
+  - [3. Important Requirement: Application Compatibility](#3-important-requirement-application-compatibility)
+  - [4. Creating a Graviton Node Group](#4-creating-a-graviton-node-group)
+  - [5. Configuring the AMI Type](#5-configuring-the-ami-type)
+  - [6. Creating the Terraform File](#6-creating-the-terraform-file)
+  - [7. Creating a Spot Version](#7-creating-a-spot-version)
+  - [8. Applying the Configuration](#8-applying-the-configuration)
+  - [9. Validating the Nodes](#9-validating-the-nodes)
+  - [10. Why Labels Are Important](#10-why-labels-are-important)
+- [Lesson 4: Workload Segregation Using Node Selector](#lesson-4-workload-segregation-using-node-selector)
+  - [1. Understanding Node Selector](#1-understanding-node-selector)
+  - [2. Using the Example Deployment](#2-using-the-example-deployment)
+  - [3. Applying the Deployment](#3-applying-the-deployment)
+  - [4. Validating Where Pods Are Running](#4-validating-where-pods-are-running)
+  - [5. Changing Strategy to Spot](#5-changing-strategy-to-spot)
+  - [6. Real Use Cases](#6-real-use-cases)
+  - [7. Combining with Node Groups](#7-combining-with-node-groups)
+- [Lesson 5: Using Node Affinity for Smarter Scheduling](#lesson-5-using-node-affinity-for-smarter-scheduling)
+  - [1. Understanding Node Affinity](#1-understanding-node-affinity)
+  - [2. Creating a Node Affinity Deployment](#2-creating-a-node-affinity-deployment)
+  - [3. Applying the Configuration](#3-applying-the-configuration)
+  - [4. Observing Pod Distribution](#4-observing-pod-distribution)
+  - [5. Important Behavior](#5-important-behavior)
+  - [6. Real Use Case](#6-real-use-case)
+  - [Key Takeaways](#key-takeaways)
+- [Lesson 6: Segregating Workloads by Criticality](#lesson-6-segregating-workloads-by-criticality)
+  - [1. Defining Critical vs Non-Critical Nodes](#1-defining-critical-vs-non-critical-nodes)
+  - [2. Creating a Critical Node Group](#2-creating-a-critical-node-group)
+  - [3. Creating a Soft (Non-Critical) Node Group](#3-creating-a-soft-non-critical-node-group)
+  - [4. Applying the Configuration](#4-applying-the-configuration)
+  - [5. Validating Node Labels](#5-validating-node-labels)
+  - [6. Using Criticality in Deployments](#6-using-criticality-in-deployments)
+  - [7. Real Use Case](#7-real-use-case)
+  - [Key Takeaways](#key-takeaways-1)
+- [Lesson 7: Customizing Node Groups with Launch Templates](#lesson-7-customizing-node-groups-with-launch-templates)
+  - [1. Why Use Launch Templates](#1-why-use-launch-templates)
+  - [2. What We Can Customize](#2-what-we-can-customize)
+  - [3. Preparing User Data](#3-preparing-user-data)
+  - [4. Creating AMI Variable](#4-creating-ami-variable)
+  - [5. Creating the Launch Template](#5-creating-the-launch-template)
+  - [6. Passing Cluster Data to User Data](#6-passing-cluster-data-to-user-data)
+  - [7. Validating the Launch Template](#7-validating-the-launch-template)
+  - [8. Creating a Custom Node Group](#8-creating-a-custom-node-group)
+  - [9. Applying and Validating](#9-applying-and-validating)
+  - [10. Real Use Cases](#10-real-use-cases)
+  - [11. Best Practice](#11-best-practice)
+- [Lesson 8: Cluster Autoscaler and Dynamic Capacity Management](#lesson-8-cluster-autoscaler-and-dynamic-capacity-management)
+  - [1. Introduction to Cluster Autoscaler](#1-introduction-to-cluster-autoscaler)
+  - [2. Creating IAM Role for Autoscaler (IRSA)](#2-creating-iam-role-for-autoscaler-irsa)
+  - [3. Creating the IAM Policy](#3-creating-the-iam-policy)
+  - [4. Attaching Policy to the Role](#4-attaching-policy-to-the-role)
+  - [5. Deploying Cluster Autoscaler via Helm](#5-deploying-cluster-autoscaler-via-helm)
+  - [6. Configuring Node Group Limits](#6-configuring-node-group-limits)
+  - [7. Validating Autoscaler Deployment](#7-validating-autoscaler-deployment)
+  - [8. Testing Scale Up](#8-testing-scale-up)
+  - [9. Observing Node Creation](#9-observing-node-creation)
+  - [10. Testing Further Scaling](#10-testing-further-scaling)
+  - [11. Scaling Down](#11-scaling-down)
+  - [12. Understanding the Behavior](#12-understanding-the-behavior)
+  - [13. Introducing Node Termination Handler](#13-introducing-node-termination-handler)
+  - [14. Why This Is Important](#14-why-this-is-important)
+- [Lesson 9: Node Termination Handler and Safe Workload Eviction](#lesson-9-node-termination-handler-and-safe-workload-eviction)
+  - [1. Introduction to Node Termination Handler](#1-introduction-to-node-termination-handler)
+  - [2. How the Flow Works](#2-how-the-flow-works)
+  - [3. Creating IAM Role (IRSA)](#3-creating-iam-role-irsa)
+  - [4. Creating IAM Policy](#4-creating-iam-policy)
+  - [5. Attaching Policy to Role](#5-attaching-policy-to-role)
+  - [6. Creating SQS Queue](#6-creating-sqs-queue)
+  - [7. Creating CloudWatch Event Rules](#7-creating-cloudwatch-event-rules)
+  - [8. Testing Event Flow (Before Deployment)](#8-testing-event-flow-before-deployment)
+  - [9. Deploying Node Termination Handler (Helm)](#9-deploying-node-termination-handler-helm)
+  - [10. Validating Deployment](#10-validating-deployment)
+  - [11. Verifying Event Consumption](#11-verifying-event-consumption)
+  - [12. Testing Node Termination](#12-testing-node-termination)
+  - [13. Observing Kubernetes Behavior](#13-observing-kubernetes-behavior)
+  - [14. Why This Matters](#14-why-this-matters)
+
 ---
 
-# Understanding Node Groups
+# Lesson 1: Advanced Node Group Strategies in Amazon EKS
+
+---
+
+## 1. Understanding Node Groups
 
 A **Node Group** in Amazon EKS represents a group of EC2 instances that run Kubernetes workloads.
 
@@ -27,7 +132,7 @@ Using multiple node groups allows us to **separate workloads and optimize costs 
 
 ---
 
-# Step 1 - Reviewing the Previous Node Group
+## 2. Reviewing the Previous Node Group
 
 In the previous module we created a **basic managed node group**.
 
@@ -83,7 +188,7 @@ Now we will expand this configuration.
 
 ---
 
-# Step 2 - Defining Capacity Type
+## 3. Defining Capacity Type
 
 One important configuration is the **capacity type**.
 
@@ -105,7 +210,7 @@ Recommended for critical workloads
 
 ---
 
-# Step 3 - Adding Node Labels
+## 4. Adding Node Labels
 
 Node labels allow Kubernetes to **schedule workloads to specific nodes**.
 
@@ -131,7 +236,7 @@ Run workloads on specific operating systems
 
 ---
 
-# Step 4 - Deploying the Node Group
+## 5. Deploying the Node Group
 
 After updating the configuration, apply the Terraform deployment.
 
@@ -151,7 +256,7 @@ There you will see the node group with its configured labels and capacity type.
 
 ---
 
-# Step 5 - Creating a Spot Node Group
+## 6. Creating a Spot Node Group
 
 Now we will create a **second node group using Spot instances**.
 
@@ -215,7 +320,7 @@ resource "aws_eks_node_group" "spot" {
 
 ---
 
-# Step 6 - Deploying the Spot Node Group
+## 7. Deploying the Spot Node Group
 
 Apply the configuration again.
 
@@ -234,7 +339,7 @@ Spot node group
 
 ---
 
-# Step 7 - Verifying the Node Groups
+## 8. Verifying the Node Groups
 
 Check the node groups in the AWS console.
 
@@ -245,22 +350,21 @@ EKS → Cluster → Compute
 You should now see two node groups:
 
 ```txt
-default (On-Demand)
-spot-nodes (Spot)
+<project>-workers (On-Demand)
+<project>-workers-spot (Spot)
 ```
 
 Each node will also include the labels we defined earlier.
 
 ---
 
-# Module 3 - Lesson 2  
-## Using Managed Node Groups with Bottlerocket
+# Lesson 2: Using Managed Node Groups with Bottlerocket
 
 In this lesson we will learn how to create **Managed Node Groups using Bottlerocket** and understand what makes it different from Amazon Linux nodes.
 
 ---
 
-# Step 8 - Understanding What Bottlerocket Is
+## 1. Understanding What Bottlerocket Is
 
 Before creating the node group, it is important to understand what Bottlerocket actually is.
 
@@ -281,7 +385,7 @@ It is a lightweight and secure alternative for Kubernetes worker nodes.
 
 ---
 
-# Step 9 - Why Use Bottlerocket in EKS
+## 2. Why Use Bottlerocket in EKS
 
 Bottlerocket is not designed to improve performance.  
 The main advantage is **security and operational simplicity**.
@@ -299,7 +403,7 @@ It is especially useful when nodes are more **ephemeral** and focused only on ru
 
 ---
 
-# Step 10 - Creating a Managed Node Group with Bottlerocket
+## 3. Creating a Managed Node Group with Bottlerocket
 
 Creating a Bottlerocket node group is very simple.  
 It is basically the same process used for Amazon Linux nodes.
@@ -320,7 +424,7 @@ This tells EKS to create nodes using the Bottlerocket operating system instead o
 
 ---
 
-# Step 11 - Creating the Bottlerocket Node Group File
+## 4. Creating the Bottlerocket Node Group File
 
 We will duplicate the existing node group configuration and create a new file.
 
@@ -349,7 +453,7 @@ resource "aws_eks_node_group" "bottlerocket" {
 
   capacity_type = "ON_DEMAND"
 
-  ami_type = "BOTTLEROCKET_X86_64"
+  ami_type = "BOTTLEROCKET_x86_64"
 
   labels = {
     "capacity/os" = "BOTTLEROCKET"
@@ -382,7 +486,7 @@ resource "aws_eks_node_group" "bottlerocket" {
 
 ---
 
-# Step 12 - Applying the Configuration
+## 5. Applying the Configuration
 
 Now we apply the configuration to create the new node group.
 
@@ -396,7 +500,7 @@ After a few minutes, the new nodes will be available inside the cluster.
 
 ---
 
-# Step 13 - Checking the Nodes in AWS Console
+## 6. Checking the Nodes in AWS Console
 
 After the apply finishes, we can verify the nodes in the AWS console.
 
@@ -413,7 +517,7 @@ This confirms the new node group was created successfully.
 
 ---
 
-# Step 14 - Connecting to the Nodes
+## 7. Connecting to the Nodes
 
 If you connect to an Amazon Linux node using Session Manager, you will see a normal Linux environment.
 
@@ -429,7 +533,7 @@ This is exactly the goal of Bottlerocket.
 
 ---
 
-# Step 15 - Creating a Bottlerocket Node Group Using Spot Instances
+## 8. Creating a Bottlerocket Node Group Using Spot Instances
 
 We can also create a Spot version of the Bottlerocket node group.
 
@@ -460,7 +564,7 @@ resource "aws_eks_node_group" "bottlerocket_spot" {
 
   capacity_type = "SPOT"
 
-  ami_type = "BOTTLEROCKET_X86_64"
+  ami_type = "BOTTLEROCKET_x86_64"
 
   labels = {
     "capacity/os" = "BOTTLEROCKET"
@@ -493,7 +597,7 @@ resource "aws_eks_node_group" "bottlerocket_spot" {
 
 ---
 
-# Step 16 - Checking Node Labels
+## 9. Checking Node Labels
 
 Now we can list the nodes using labels to see how they are distributed.
 
@@ -514,14 +618,13 @@ On-Demand nodes
 
 ---
 
-# Module 3 - Lesson 3  
-## Using Graviton (ARM64) Instances in EKS
+# Lesson 3: Using Graviton (ARM64) Instances in EKS
 
 In this lesson we will learn how to use **Graviton instances (ARM64)** in our EKS cluster and how to create node groups using this architecture.
 
 ---
 
-# Step 17 - Understanding What Graviton Is
+## 1. Understanding What Graviton Is
 
 Graviton is a type of AWS instance that uses **ARM64 processors** instead of traditional x86 (Intel/AMD).
 
@@ -544,7 +647,7 @@ m6g.large
 
 ---
 
-# Step 18 - Benefits of Using Graviton
+## 2. Benefits of Using Graviton
 
 The main advantage of Graviton is **cost efficiency**.
 
@@ -559,7 +662,7 @@ The biggest benefit is cost savings
 
 ---
 
-# Step 19 - Important Requirement: Application Compatibility
+## 3. Important Requirement: Application Compatibility
 
 Before using ARM64, you must ensure your applications support it.
 
@@ -575,7 +678,7 @@ If your application is not compatible, it will not run.
 
 ---
 
-# Step 20 - Creating a Graviton Node Group
+## 4. Creating a Graviton Node Group
 
 To create a Graviton node group, we need to change two things:
 
@@ -593,21 +696,21 @@ c7g.large
 
 ---
 
-# Step 21 - Configuring the AMI Type
+## 5. Configuring the AMI Type
 
 We must use an ARM-compatible AMI.
 
 Example:
 
 ```txt
-ami_type = "AL2023_ARM_64"
+ami_type = "AL2023_ARM_64_STANDARD"
 ```
 
 This ensures the node runs with the correct architecture.
 
 ---
 
-# Step 22 - Creating the Terraform File
+## 6. Creating the Terraform File
 
 We can reuse an existing node group and adapt it.
 
@@ -672,7 +775,7 @@ resource "aws_eks_node_group" "graviton" {
 
 ---
 
-# Step 23 - Creating a Spot Version
+## 7. Creating a Spot Version
 
 We can also create a Spot version of the Graviton node group.
 
@@ -742,9 +845,11 @@ Graviton On-Demand
 Graviton Spot
 ```
 
+> **Note:** the real `nodes_graviton_spot.tf` reuses the exact same `node_group_name` (`"${var.project_name}-workers-graviton"`) as the on-demand version above — it does not append a `-spot` suffix, unlike the Bottlerocket Spot file. This is a naming-collision risk in the source Terraform, reproduced here faithfully.
+
 ---
 
-# Step 24 - Applying the Configuration
+## 8. Applying the Configuration
 
 Run:
 
@@ -756,7 +861,7 @@ After a few minutes, the new ARM64 nodes will be available in the cluster.
 
 ---
 
-# Step 25 - Validating the Nodes
+## 9. Validating the Nodes
 
 Now we can check all nodes in the cluster.
 
@@ -779,7 +884,7 @@ On-Demand nodes
 
 ---
 
-# Step 26 - Why Labels Are Important
+## 10. Why Labels Are Important
 
 Labels are critical to control where workloads run.
 
@@ -795,21 +900,20 @@ Isolate critical applications
 Example labels we used:
 
 ```hcl
-architecture = arm64  
-os           = amazon-linux  
-capacity     = spot / on-demand
+"capacity/arch" = "ARM64"
+"capacity/os"   = "AMAZON_LINUX"
+"capacity/type" = "SPOT" / "ON_DEMAND"
 ```
 
 ---
 
-# Module 3 - Lesson 4  
-## Workload Segregation Using Node Selector
+# Lesson 4: Workload Segregation Using Node Selector
 
 In this lesson we will learn how to control **where pods run inside the cluster** using node labels and `nodeSelector`.
 
 ---
 
-# Step 27 - Understanding Node Selector
+## 1. Understanding Node Selector
 
 Node Selector allows us to **force a pod to run only on specific nodes** based on labels.
 
@@ -826,7 +930,7 @@ This is useful when workloads have **specific requirements**.
 
 ---
 
-# Step 28 - Using the Example Deployment
+## 2. Using the Example Deployment
 
 We reuse the previous application and add a `nodeSelector`.
 
@@ -909,7 +1013,7 @@ Only schedule pods on nodes that match these labels
 
 ---
 
-# Step 29 - Applying the Deployment
+## 3. Applying the Deployment
 
 Apply the manifest:
 
@@ -927,7 +1031,7 @@ Pods will only start on nodes that match the selector.
 
 ---
 
-# Step 30 - Validating Where Pods Are Running
+## 4. Validating Where Pods Are Running
 
 To confirm:
 
@@ -946,9 +1050,11 @@ Node is NOT Spot
 
 This proves the selector is working.
 
+> **Note:** the real node groups label nodes `"capacity/arch" = "X86_64"` (uppercase), while this manifest's `nodeSelector` uses `capacity/arch: x86_64` (lowercase). Kubernetes label matching is case-sensitive, so against the real cluster this selector would never match and the pod would stay `Pending`, contradicting the claim above.
+
 ---
 
-# Step 31 - Changing Strategy to Spot
+## 5. Changing Strategy to Spot
 
 Now we can modify the selector:
 
@@ -971,7 +1077,7 @@ Still respecting x86 (if defined)
 
 ---
 
-# Step 32 - Real Use Cases
+## 6. Real Use Cases
 
 This approach is extremely powerful.
 
@@ -991,7 +1097,7 @@ Examples:
 
 ---
 
-# Step 33 - Combining with Node Groups
+## 7. Combining with Node Groups
 
 Since we created multiple node groups:
 
@@ -1005,14 +1111,13 @@ We can now fully control scheduling using labels.
 
 ---
 
-# Module 3 - Lesson 5  
-## Using Node Affinity for Smarter Scheduling
+# Lesson 5: Using Node Affinity for Smarter Scheduling
 
 In this lesson we go beyond `nodeSelector` and introduce **Node Affinity**, which allows more flexible and intelligent scheduling.
 
 ---
 
-# Step 34 - Understanding Node Affinity
+## 1. Understanding Node Affinity
 
 Node Affinity is a more advanced version of node selection.
 
@@ -1033,7 +1138,7 @@ nodeAffinity → flexible (can prefer or require)
 
 ---
 
-# Step 35 - Creating a Node Affinity Deployment
+## 2. Creating a Node Affinity Deployment
 
 We create a new deployment using `affinity`.
 
@@ -1128,13 +1233,13 @@ spec:
 
 This tells Kubernetes:
 
-```
+```txt
 Try to balance pods between Spot and On-Demand
 ```
 
 ---
 
-# Step 36 - Applying the Configuration
+## 3. Applying the Configuration
 
 Apply the deployment:
 
@@ -1150,7 +1255,7 @@ kubectl get pods -n chip -o wide
 
 ---
 
-# Step 37 - Observing Pod Distribution
+## 4. Observing Pod Distribution
 
 Check where pods are running:
 
@@ -1174,9 +1279,11 @@ Pod 3 → Spot
 Pod 4 → On-Demand
 ```
 
+> **Note:** this manifest combines the same lowercase `capacity/arch: x86_64` as a *hard* `nodeSelector` with the soft `nodeAffinity` above. Since the real node groups label nodes `"capacity/arch" = "X86_64"` (uppercase), the `nodeSelector` would never match in the real cluster — the pod would never schedule at all, not just fail to balance ~50/50 as described.
+
 ---
 
-# Step 38 - Important Behavior
+## 5. Important Behavior
 
 Node Affinity with `preferredDuringSchedulingIgnoredDuringExecution` is a **soft rule**.
 
@@ -1191,7 +1298,7 @@ It does NOT block scheduling.
 
 ---
 
-# Step 39 - Real Use Case
+## 6. Real Use Case
 
 This is extremely useful for cost optimization strategies:
 
@@ -1210,7 +1317,7 @@ weight 20 → less preference for On-Demand
 
 ---
 
-# Step 40 - Key Takeaways
+## Key Takeaways
 
 - Node Affinity allows **intelligent workload distribution**
 - Works great with multiple node groups
@@ -1223,14 +1330,13 @@ Compared to nodeSelector, it gives much more control without being restrictive.
 
 ---
 
-# Module 3 - Lesson 6  
-## Segregating Workloads by Criticality
+# Lesson 6: Segregating Workloads by Criticality
 
 In this lesson we explore a practical strategy: **separating workloads based on criticality** using node labels and node groups.
 
 ---
 
-# Step 41 - Defining Critical vs Non-Critical Nodes
+## 1. Defining Critical vs Non-Critical Nodes
 
 We can create different node groups based on how critical the workloads are.
 
@@ -1250,7 +1356,7 @@ severity = soft
 
 ---
 
-# Step 42 - Creating a Critical Node Group
+## 2. Creating a Critical Node Group
 
 We can reuse an existing node group (e.g., Bottlerocket) and adapt it.
 
@@ -1321,7 +1427,7 @@ Production-sensitive services
 
 ---
 
-# Step 43 - Creating a Soft (Non-Critical) Node Group
+## 3. Creating a Soft (Non-Critical) Node Group
 
 Now we create another node group for less critical workloads.
 
@@ -1393,7 +1499,7 @@ Cost-optimized workloads
 
 ---
 
-# Step 44 - Applying the Configuration
+## 4. Applying the Configuration
 
 Run:
 
@@ -1410,7 +1516,7 @@ severity = soft
 
 ---
 
-# Step 45 - Validating Node Labels
+## 5. Validating Node Labels
 
 You can verify labels with:
 
@@ -1426,7 +1532,7 @@ kubectl get nodes -o jsonpath="{.items[*].metadata.labels.severity}"
 
 ---
 
-# Step 46 - Using Criticality in Deployments
+## 6. Using Criticality in Deployments
 
 Now we can control where workloads run.
 
@@ -1445,7 +1551,7 @@ Only critical nodes will run this workload
 
 ---
 
-# Step 47 - Real Use Case
+## 7. Real Use Case
 
 This pattern is very powerful in real environments:
 
@@ -1467,7 +1573,7 @@ Efficient resource utilization
 
 ---
 
-# Step 48 - Key Takeaway
+## Key Takeaways
 
 By combining:
 
@@ -1481,14 +1587,13 @@ You can design a cluster that intelligently separates workloads based on busines
 
 ---
 
-# Module 3 - Lesson 7  
-## Customizing Node Groups with Launch Templates
+# Lesson 7: Customizing Node Groups with Launch Templates
 
 In this lesson we learn how to extend Managed Node Groups using **Launch Templates** to gain more control over configuration.
 
 ---
 
-# Step 48 - Why Use Launch Templates
+## 1. Why Use Launch Templates
 
 Managed Node Groups already handle most things automatically.
 
@@ -1506,7 +1611,7 @@ For this, we use **Launch Templates**.
 
 ---
 
-# Step 49 - What We Can Customize
+## 2. What We Can Customize
 
 With a Launch Template, we can define:
 
@@ -1522,7 +1627,7 @@ This gives us much more flexibility than default node groups.
 
 ---
 
-# Step 50 - Preparing User Data
+## 3. Preparing User Data
 
 First, we extract the default user data from an existing instance.
 
@@ -1563,21 +1668,21 @@ This allows Terraform to dynamically inject values.
 
 ---
 
-# Step 51 - Creating AMI Variable
+## 4. Creating AMI Variable
 
 We define a variable for the custom AMI:
 
 ```hcl
 variable "custom_ami" {
-  type = string
+  type        = string
   description = "Customized AMI ID for the nodes"
-  default = "ami-01d396130bcd204a1"
+  default     = "ami-01d396130bcd204a1"
 }
 ```
 
 ---
 
-# Step 52 - Creating the Launch Template
+## 5. Creating the Launch Template
 
 Create a new file:
 
@@ -1624,9 +1729,11 @@ resource "aws_launch_template" "custom" {
 }
 ```
 
+> **Note:** `var.custom_ami` is declared but never referenced anywhere in the real Terraform — this launch template sets no `image_id`, and the node group below (§8) sets no `ami_type`. Despite the variable's existence, no custom AMI is actually wired in by this configuration.
+
 ---
 
-# Step 53 - Passing Cluster Data to User Data
+## 6. Passing Cluster Data to User Data
 
 We inject required values:
 
@@ -1640,7 +1747,7 @@ These come from the EKS cluster resource.
 
 ---
 
-# Step 54 - Validating the Launch Template
+## 7. Validating the Launch Template
 
 After:
 
@@ -1662,9 +1769,11 @@ AMI is correct
 Settings are applied
 ```
 
+> **Note:** as flagged in §5, this exact configuration never actually overrides the AMI (no `image_id`/`ami_type` wired to `var.custom_ami`), so in practice the "AMI is correct" check would just be confirming the default AMI.
+
 ---
 
-# Step 55 - Creating a Custom Node Group
+## 8. Creating a Custom Node Group
 
 Now we create a new node group using the Launch Template.
 
@@ -1727,7 +1836,7 @@ This overrides default behavior.
 
 ---
 
-# Step 56 - Applying and Validating
+## 9. Applying and Validating
 
 Run:
 
@@ -1743,9 +1852,11 @@ Custom AMI should be used
 Custom disk config should be applied
 ```
 
+> **Note:** again, since no `image_id`/`ami_type` is actually wired to `var.custom_ami` in this configuration (see §5), the instances will run the default AMI, not a custom one.
+
 ---
 
-# Step 57 - Real Use Cases
+## 10. Real Use Cases
 
 Launch Templates are useful when you need:
 
@@ -1756,7 +1867,7 @@ Launch Templates are useful when you need:
 
 ---
 
-# Step 58 - Best Practice
+## 11. Best Practice
 
 - Prefer default Managed Node Groups when possible
 - Use Launch Templates only when necessary
@@ -1766,29 +1877,13 @@ They are powerful, but increase operational overhead.
 
 ---
 
-# Step 34 - Introduction to Cluster Autoscaler
-
-Now that we already know how to create multiple node groups, we need a way to **automatically scale cluster capacity**.
-
-The Cluster Autoscaler is responsible for:
-
-``
-Add nodes when pods are pending (no capacity)
-Remove nodes when they are underutilized
-``
-
-It works directly with node groups and their Auto Scaling Groups.
-
----
-
-# Module 3 - Lesson 8  
-## Cluster Autoscaler and Dynamic Capacity Management
+# Lesson 8: Cluster Autoscaler and Dynamic Capacity Management
 
 In this lesson, we will explore how to make our Kubernetes cluster dynamically scalable using the Cluster Autoscaler. Instead of manually managing capacity, we will enable the cluster to automatically add or remove nodes based on workload demand. We will also cover how to securely grant permissions using IAM (IRSA), deploy the Autoscaler using Helm, and understand how it reacts to real scenarios like sudden traffic spikes. Finally, we introduce the Node Termination Handler, which ensures workloads are safely handled during instance interruptions, especially when using Spot instances.
 
 ---
 
-# Step 59 - Introduction to Cluster Autoscaler
+## 1. Introduction to Cluster Autoscaler
 
 Now that we already know how to create multiple node groups, we need a way to **automatically scale cluster capacity**.
 
@@ -1803,7 +1898,7 @@ It works directly with node groups and their Auto Scaling Groups.
 
 ---
 
-# Step 60 - Creating IAM Role for Autoscaler (IRSA)
+## 2. Creating IAM Role for Autoscaler (IRSA)
 
 To allow the Autoscaler to interact with AWS, we must create an IAM Role using IRSA (OIDC).
 
@@ -1891,7 +1986,7 @@ This creates the trust relationship between the cluster and AWS IAM.
 
 ---
 
-# Step 61 - Creating the IAM Policy
+## 3. Creating the IAM Policy
 
 The Autoscaler needs permissions to manage infrastructure.
 
@@ -1949,7 +2044,7 @@ Manage instances lifecycle
 
 ---
 
-# Step 62 - Attaching Policy to the Role
+## 4. Attaching Policy to the Role
 
 Now we attach the policy to the IAM Role:
 
@@ -1972,7 +2067,7 @@ The Autoscaler can now authenticate securely.
 
 ---
 
-# Step 63 - Deploying Cluster Autoscaler via Helm
+## 5. Deploying Cluster Autoscaler via Helm
 
 We deploy the Autoscaler using Helm.
 
@@ -2022,7 +2117,7 @@ The annotation is what links the pod to the IAM Role.
 
 ---
 
-# Step 64 - Configuring Node Group Limits
+## 6. Configuring Node Group Limits
 
 The Autoscaler respects min/max values defined in node groups.
 
@@ -2043,7 +2138,7 @@ Scale down → until min
 
 ---
 
-# Step 65 - Validating Autoscaler Deployment
+## 7. Validating Autoscaler Deployment
 
 Check if the pod is running:
 
@@ -2053,7 +2148,7 @@ kubectl get pods -n kube-system
 
 ---
 
-# Step 66 - Testing Scale Up
+## 8. Testing Scale Up
 
 Now we force the cluster to scale.
 
@@ -2073,7 +2168,7 @@ New nodes are created
 
 ---
 
-# Step 67 - Observing Node Creation
+## 9. Observing Node Creation
 
 Check nodes:
 
@@ -2092,7 +2187,7 @@ Autoscaler keeps adding nodes until all pods are scheduled.
 
 ---
 
-# Step 68 - Testing Further Scaling
+## 10. Testing Further Scaling
 
 Increase even more:
 
@@ -2110,7 +2205,7 @@ Cluster stabilizes again
 
 ---
 
-# Step 69 - Scaling Down
+## 11. Scaling Down
 
 Now reduce workload:
 
@@ -2127,7 +2222,7 @@ Cluster returns to baseline
 
 ---
 
-# Step 70 - Understanding the Behavior
+## 12. Understanding the Behavior
 
 Cluster Autoscaler works based on:
 
@@ -2145,7 +2240,7 @@ Depends on node groups
 
 ---
 
-# Step 71 - Introducing Node Termination Handler
+## 13. Introducing Node Termination Handler
 
 When using Spot instances, nodes can be terminated by AWS.
 
@@ -2167,7 +2262,7 @@ Application downtime
 
 ---
 
-# Step 72 - Why This Is Important
+## 14. Why This Is Important
 
 Without this:
 
@@ -2185,14 +2280,13 @@ This is critical for production environments using Spot.
 
 ---
 
-# Module 3 - Lesson 9  
-## Node Termination Handler and Safe Workload Eviction
+# Lesson 9: Node Termination Handler and Safe Workload Eviction
 
 In this lesson, we will learn how to handle infrastructure events in a Kubernetes cluster to avoid unexpected downtime. We will implement the Node Termination Handler, which captures events such as Spot interruptions or instance shutdowns and takes proactive actions like draining nodes and safely rescheduling pods. This ensures that workloads are not abruptly interrupted and improves the overall reliability and resilience of the cluster.
 
 ---
 
-# Step 73 - Introduction to Node Termination Handler
+## 1. Introduction to Node Termination Handler
 
 The Node Termination Handler is responsible for **capturing AWS infrastructure events** and reacting before nodes are terminated.
 
@@ -2208,7 +2302,7 @@ This is especially important when using **Spot instances**.
 
 ---
 
-# Step 74 - How the Flow Works
+## 2. How the Flow Works
 
 The solution works using AWS event integration:
 
@@ -2227,7 +2321,7 @@ Action is executed on the node
 
 ---
 
-# Step 75 - Creating IAM Role (IRSA)
+## 3. Creating IAM Role (IRSA)
 
 Just like Cluster Autoscaler, we need an IAM Role.
 
@@ -2262,7 +2356,11 @@ resource "aws_iam_role" "node_termination" {
   assume_role_policy = data.aws_iam_policy_document.node_termination.json
   name               = format("%s-node-termination-handler", var.project_name)
 }
+```
 
+> **Note:** this second role block is an orphaned leftover in the real Terraform — it references `data.aws_iam_policy_document.node_termination`, which doesn't exist anywhere in the codebase (only the `node_termination_handler` variant above does), and it duplicates that same role's `name`. As written, this block would fail `terraform apply`.
+
+```hcl
 data "aws_iam_policy_document" "aws_node_termination_handler_policy" {
   version = "2012-10-17"
 
@@ -2300,7 +2398,7 @@ This allows the handler to interact with AWS services securely.
 
 ---
 
-# Step 76 - Creating IAM Policy
+## 4. Creating IAM Policy
 
 The Node Termination Handler needs permissions such as:
 
@@ -2323,7 +2421,7 @@ Act based on events
 
 ---
 
-# Step 77 - Attaching Policy to Role
+## 5. Attaching Policy to Role
 
 Attach the policy to the IAM Role:
 
@@ -2343,7 +2441,7 @@ Permissions (IAM Policy)
 
 ---
 
-# Step 78 - Creating SQS Queue
+## 6. Creating SQS Queue
 
 We create an SQS queue to receive AWS events.
 
@@ -2499,7 +2597,7 @@ resource "aws_cloudwatch_event_target" "node_termination_handler_state_change" {
 
 ---
 
-# Step 79 - Creating CloudWatch Event Rules
+## 7. Creating CloudWatch Event Rules
 
 We configure multiple event rules to capture different scenarios:
 
@@ -2519,7 +2617,7 @@ SQS Queue
 
 ---
 
-# Step 80 - Testing Event Flow (Before Deployment)
+## 8. Testing Event Flow (Before Deployment)
 
 Before deploying the handler, we can validate the pipeline.
 
@@ -2543,7 +2641,7 @@ Events are being captured correctly
 
 ---
 
-# Step 81 - Deploying Node Termination Handler (Helm)
+## 9. Deploying Node Termination Handler (Helm)
 
 Now we deploy using Helm.
 
@@ -2590,7 +2688,7 @@ resource "helm_release" "node_termination_handler" {
 
 ---
 
-# Step 82 - Validating Deployment
+## 10. Validating Deployment
 
 Check if the pod is running:
 
@@ -2600,7 +2698,7 @@ kubectl get pods -n kube-system
 
 ---
 
-# Step 83 - Verifying Event Consumption
+## 11. Verifying Event Consumption
 
 After deployment:
 
@@ -2616,7 +2714,7 @@ Handler is consuming and processing events
 
 ---
 
-# Step 84 - Testing Node Termination
+## 12. Testing Node Termination
 
 Now test in practice.
 
@@ -2636,7 +2734,7 @@ Pods are rescheduled on other nodes
 
 ---
 
-# Step 85 - Observing Kubernetes Behavior
+## 13. Observing Kubernetes Behavior
 
 You can verify with:
 
@@ -2654,7 +2752,7 @@ Pods moving to other nodes
 
 ---
 
-# Step 86 - Why This Matters
+## 14. Why This Matters
 
 Without Node Termination Handler:
 
