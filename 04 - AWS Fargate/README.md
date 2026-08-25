@@ -1,7 +1,8 @@
-# Module 4 - Lesson 1  
-## Introduction to AWS Fargate in EKS
+# Module 4: AWS Fargate
 
-In this lesson we introduce **AWS Fargate in EKS**, a serverless compute option that removes the need to manage nodes.
+## Overview
+
+In this module we introduce **AWS Fargate in EKS**, a serverless compute option that removes the need to manage nodes.
 
 Unlike traditional Kubernetes setups where you manage EC2 instances (nodes), Fargate allows you to run workloads without provisioning or maintaining infrastructure.
 
@@ -11,9 +12,88 @@ Key idea:
 1 Pod = 1 dedicated Fargate microVM (node)
 ```
 
+## Table of Contents
+
+- [Lesson 1: Introduction to AWS Fargate in EKS](#lesson-1-introduction-to-aws-fargate-in-eks)
+  - [1. What is Fargate?](#1-what-is-fargate)
+  - [2. How Fargate Works in EKS](#2-how-fargate-works-in-eks)
+  - [3. Comparing EKS Models](#3-comparing-eks-models)
+    - [Self-managed Kubernetes](#self-managed-kubernetes)
+    - [EKS (Default)](#eks-default)
+    - [EKS with Fargate](#eks-with-fargate)
+  - [4. Advantages of Fargate](#4-advantages-of-fargate)
+  - [5. Limitations of Fargate](#5-limitations-of-fargate)
+  - [6. When to Use Fargate](#6-when-to-use-fargate)
+  - [7. What We Will Do Next](#7-what-we-will-do-next)
+- [Lesson 2: Setting Up Fargate Profiles in EKS](#lesson-2-setting-up-fargate-profiles-in-eks)
+  - [1. Creating the Fargate IAM Role](#1-creating-the-fargate-iam-role)
+  - [2. Attaching Required Policy](#2-attaching-required-policy)
+  - [3. Creating Access Entry](#3-creating-access-entry)
+  - [4. Creating the Fargate Profile](#4-creating-the-fargate-profile)
+  - [5. Defining the Selector](#5-defining-the-selector)
+  - [6. Applying the Configuration](#6-applying-the-configuration)
+  - [7. Deploying a Workload on Fargate](#7-deploying-a-workload-on-fargate)
+  - [8. Understanding Provisioning Behavior](#8-understanding-provisioning-behavior)
+  - [9. Validating Fargate Nodes](#9-validating-fargate-nodes)
+  - [10. Scaling the Application](#10-scaling-the-application)
+  - [Key Takeaways](#key-takeaways)
+- [Lesson 3: Building a Fully Fargate EKS Cluster](#lesson-3-building-a-fully-fargate-eks-cluster)
+  - [1. Creating a Dedicated Branch](#1-creating-a-dedicated-branch)
+  - [2. Removing the Existing Fargate Profile](#2-removing-the-existing-fargate-profile)
+  - [3. Creating a Wildcard Fargate Profile](#3-creating-a-wildcard-fargate-profile)
+  - [4. Understanding Wildcard Profiles](#4-understanding-wildcard-profiles)
+  - [5. Redeploying Workloads](#5-redeploying-workloads)
+  - [6. Understanding DaemonSet Limitations](#6-understanding-daemonset-limitations)
+  - [7. Observing Fargate Scheduling](#7-observing-fargate-scheduling)
+  - [8. Provisioning Time](#8-provisioning-time)
+  - [9. Removing Managed Node Groups](#9-removing-managed-node-groups)
+  - [10. Updating Terraform Dependencies](#10-updating-terraform-dependencies)
+  - [11. Understanding Security Group Changes](#11-understanding-security-group-changes)
+  - [12. Opening Required Ports](#12-opening-required-ports)
+  - [13. Applying the Changes](#13-applying-the-changes)
+  - [14. Validating the Fargate Cluster](#14-validating-the-fargate-cluster)
+  - [15. Verifying Node Types](#15-verifying-node-types)
+  - [16. Metrics Server Considerations](#16-metrics-server-considerations)
+  - [17. Deciding Whether to Keep Metrics Server](#17-deciding-whether-to-keep-metrics-server)
+  - [18. Confirming a Fully Fargate Cluster](#18-confirming-a-fully-fargate-cluster)
+  - [19. Understanding CoreDNS Challenges](#19-understanding-coredns-challenges)
+  - [20. Historical CoreDNS Limitation](#20-historical-coredns-limitation)
+  - [21. Current CoreDNS Behavior](#21-current-coredns-behavior)
+  - [22. Preparing for the CoreDNS Workaround](#22-preparing-for-the-coredns-workaround)
+- [Lesson 4: Fixing CoreDNS in Full Fargate Clusters](#lesson-4-fixing-coredns-in-full-fargate-clusters)
+  - [1. Understanding the CoreDNS Problem](#1-understanding-the-coredns-problem)
+  - [2. Reviewing the Lambda Code](#2-reviewing-the-lambda-code)
+  - [3. Creating the Lambda IAM Role](#3-creating-the-lambda-iam-role)
+  - [4. Creating the Lambda Security Group](#4-creating-the-lambda-security-group)
+  - [5. Packaging the Lambda Code](#5-packaging-the-lambda-code)
+  - [6. Initializing Terraform](#6-initializing-terraform)
+  - [7. Creating the Lambda Function](#7-creating-the-lambda-function)
+  - [8. Invoking the Lambda Automatically](#8-invoking-the-lambda-automatically)
+  - [9. Passing Authentication Information](#9-passing-authentication-information)
+  - [10. Triggering the CoreDNS Rollout](#10-triggering-the-coredns-rollout)
+  - [11. Validating the Rollout](#11-validating-the-rollout)
+  - [12. Confirming CoreDNS Health](#12-confirming-coredns-health)
+  - [13. Why This Fix Is Useful](#13-why-this-fix-is-useful)
+  - [Key Takeaways](#key-takeaways-1)
+- [Lesson 5: Understanding Fargate Capacity and Sizing](#lesson-5-understanding-fargate-capacity-and-sizing)
+  - [1. Understanding Fargate Capacity Provisioning](#1-understanding-fargate-capacity-provisioning)
+  - [2. Requests and Limits Define the Size](#2-requests-and-limits-define-the-size)
+  - [3. Fargate Uses Fixed Capacity Profiles](#3-fargate-uses-fixed-capacity-profiles)
+  - [4. Understanding Resource Rounding](#4-understanding-resource-rounding)
+  - [5. Testing Larger Resource Requests](#5-testing-larger-resource-requests)
+  - [6. Inspecting Provisioned Capacity](#6-inspecting-provisioned-capacity)
+  - [7. Understanding Fargate Billing](#7-understanding-fargate-billing)
+  - [8. Capacity Planning Considerations](#8-capacity-planning-considerations)
+  - [9. When Fargate Makes Sense](#9-when-fargate-makes-sense)
+  - [Key Takeaways](#key-takeaways-2)
+
 ---
 
-# Step 1 - What is Fargate?
+# Lesson 1: Introduction to AWS Fargate in EKS
+
+---
+
+## 1. What is Fargate?
 
 Fargate is a compute engine powered by **Firecracker microVMs**.
 
@@ -36,7 +116,7 @@ Fully managed by AWS
 
 ---
 
-# Step 2 - How Fargate Works in EKS
+## 2. How Fargate Works in EKS
 
 In EKS, Fargate behaves differently than ECS.
 
@@ -70,23 +150,23 @@ Pods only
 
 ---
 
-# Step 3 - Comparing EKS Models
+## 3. Comparing EKS Models
 
 We now have three main models:
 
-### 1. Self-managed Kubernetes
+### Self-managed Kubernetes
 ```txt
 You manage everything  
 (Control Plane + Nodes)
 ```
 
-### 2. EKS (Default)
+### EKS (Default)
 ```txt
 AWS manages Control Plane  
 You manage Nodes
 ```
 
-### 3. EKS with Fargate
+### EKS with Fargate
 ```txt
 AWS manages Control Plane + Nodes  
 You manage only Pods
@@ -94,7 +174,7 @@ You manage only Pods
 
 ---
 
-# Step 4 - Advantages of Fargate
+## 4. Advantages of Fargate
 
 Fargate is great when you want simplicity.
 
@@ -117,7 +197,7 @@ Isolated workloads
 
 ---
 
-# Step 5 - Limitations of Fargate
+## 5. Limitations of Fargate
 
 Fargate trades flexibility for simplicity.
 
@@ -133,7 +213,7 @@ Higher cost in some scenarios
 
 ---
 
-# Step 6 - When to Use Fargate
+## 6. When to Use Fargate
 
 Use Fargate when:
 
@@ -153,7 +233,7 @@ You want maximum cost optimization
 
 ---
 
-# Step 7 - What We Will Do Next
+## 7. What We Will Do Next
 
 In this lesson, we will:
 
@@ -165,8 +245,7 @@ Compare both approaches in practice
 
 ---
 
-# Module 4 - Lesson 2  
-## Setting Up Fargate Profiles in EKS
+# Lesson 2: Setting Up Fargate Profiles in EKS
 
 In this lesson we will **configure Fargate from scratch** inside our EKS cluster.
 
@@ -182,7 +261,7 @@ We will use a **clean (vanilla) cluster** as base to keep things simple.
 
 ---
 
-# Step 8 - Creating the Fargate IAM Role
+## 1. Creating the Fargate IAM Role
 
 First, we need an IAM Role that Fargate will use.
 
@@ -214,7 +293,7 @@ resource "aws_iam_role_policy_attachment" "fargate" {
 
 ---
 
-# Step 9 - Attaching Required Policy
+## 2. Attaching Required Policy
 
 Now attach the AWS managed policy:
 
@@ -232,7 +311,7 @@ Integrate with AWS services
 
 ---
 
-# Step 10 - Creating Access Entry
+## 3. Creating Access Entry
 
 We must allow this role to interact with the cluster.
 
@@ -254,7 +333,7 @@ This authorizes Fargate to join the cluster.
 
 ---
 
-# Step 11 - Creating the Fargate Profile
+## 4. Creating the Fargate Profile
 
 Now we create the **Fargate Profile**.
 
@@ -279,6 +358,8 @@ resource "aws_eks_fargate_profile" "chip" {
 }
 ```
 
+> **Note:** the real repo's own `data.tf` names this data source `pod_subnets`, not `ssm_pod_subnets` — this is a genuine bug in the reference Terraform (would fail `terraform plan`/`apply` as written), faithfully reproduced here.
+
 Required fields:
 
 ```txt
@@ -290,7 +371,7 @@ subnet_ids
 
 ---
 
-# Step 12 - Defining the Selector
+## 5. Defining the Selector
 
 Fargate works using **selectors**.
 
@@ -299,8 +380,9 @@ You define which pods will run on Fargate based on namespace.
 Example:
 
 ```hcl
-selector:
+selector {
   namespace = "chip"
+}
 ```
 
 Meaning:
@@ -423,7 +505,7 @@ spec:
 
 ---
 
-# Step 13 - Applying the Configuration
+## 6. Applying the Configuration
 
 Run:
 
@@ -439,7 +521,7 @@ Fargate Profile - Active
 
 ---
 
-# Step 14 - Deploying a Workload on Fargate
+## 7. Deploying a Workload on Fargate
 
 Now deploy the same application (chip).
 
@@ -457,7 +539,7 @@ Namespace must match the Fargate profile
 
 ---
 
-# Step 15 - Understanding Provisioning Behavior
+## 8. Understanding Provisioning Behavior
 
 When deploying, you will notice:
 
@@ -479,7 +561,7 @@ Provisioning time:
 
 ---
 
-# Step 16 - Validating Fargate Nodes
+## 9. Validating Fargate Nodes
 
 Check nodes:
 
@@ -509,7 +591,7 @@ Example:
 
 ---
 
-# Step 17 - Scaling the Application
+## 10. Scaling the Application
 
 Scale your deployment:
 
@@ -526,7 +608,7 @@ Each pod gets its own environment
 
 ---
 
-# Step 18 - Key Takeaways
+## Key Takeaways
 
 Fargate setup flow:
 
@@ -548,8 +630,7 @@ Slower startup compared to EC2
 
 ---
 
-# Module 4 - Lesson 3
-## Building a Fully Fargate EKS Cluster
+# Lesson 3: Building a Fully Fargate EKS Cluster
 
 In the previous lesson, we configured a namespace-specific Fargate Profile and deployed workloads directly on Fargate.
 
@@ -559,7 +640,7 @@ We'll also explore some of the operational challenges that appear when running E
 
 ---
 
-# Step 19 - Creating a Dedicated Branch
+## 1. Creating a Dedicated Branch
 
 Since this lesson introduces significant infrastructure changes, create a dedicated branch.
 
@@ -573,11 +654,11 @@ This allows us to experiment without affecting previous configurations.
 
 ---
 
-# Step 20 - Removing the Existing Fargate Profile
+## 2. Removing the Existing Fargate Profile
 
 Previously, we created a Fargate Profile only for the `chip` namespace.
 
-Delete that profile because we will replace it with a cluster-wide profile.
+Comment out that profile because we will replace it with a cluster-wide profile — the reference implementation leaves the old `chip` profile commented out in `fargate.tf` rather than deleting it outright.
 
 Current profile:
 
@@ -587,7 +668,7 @@ fargate.tf
 
 ---
 
-# Step 21 - Creating a Wildcard Fargate Profile
+## 3. Creating a Wildcard Fargate Profile
 
 Instead of targeting a specific namespace, create a profile that matches all namespaces.
 
@@ -608,11 +689,13 @@ resource "aws_eks_fargate_profile" "wildcard" {
 }
 ```
 
+> **Note:** as with the earlier `chip` profile, `ssm_pod_subnets` doesn't match the real data source name (`pod_subnets`) declared in `data.tf` — a genuine bug in the reference Terraform, faithfully reproduced here.
+
 This profile will be responsible for scheduling workloads from any namespace.
 
 ---
 
-# Step 22 - Understanding Wildcard Profiles
+## 4. Understanding Wildcard Profiles
 
 Using:
 
@@ -630,7 +713,7 @@ This greatly simplifies cluster management because individual namespace profiles
 
 ---
 
-# Step 23 - Redeploying Workloads
+## 5. Redeploying Workloads
 
 After creating the wildcard profile, existing workloads may still be running on EC2 nodes.
 
@@ -646,7 +729,7 @@ As pods restart, EKS will evaluate them against the new profile.
 
 ---
 
-# Step 24 - Understanding DaemonSet Limitations
+## 6. Understanding DaemonSet Limitations
 
 Not every workload can run on Fargate.
 
@@ -668,7 +751,7 @@ These workloads require traditional Kubernetes nodes.
 
 ---
 
-# Step 25 - Observing Fargate Scheduling
+## 7. Observing Fargate Scheduling
 
 After workloads are recreated, you may notice pods entering a pending state.
 
@@ -684,7 +767,7 @@ Fargate must provision the underlying infrastructure before the pod starts.
 
 ---
 
-# Step 26 - Provisioning Time
+## 8. Provisioning Time
 
 Unlike traditional node groups, Fargate creates infrastructure on demand.
 
@@ -704,7 +787,7 @@ Deploys the pod
 
 ---
 
-# Step 27 - Removing Managed Node Groups
+## 9. Removing Managed Node Groups
 
 To build a true Fargate-only cluster, remove all EC2 node groups.
 
@@ -718,7 +801,7 @@ After removal, all compute capacity will come from Fargate.
 
 ---
 
-# Step 28 - Updating Terraform Dependencies
+## 10. Updating Terraform Dependencies
 
 Resources that previously depended on node groups should now depend on the Fargate Profile.
 
@@ -735,7 +818,7 @@ This ensures workloads are only deployed after Fargate is available.
 
 ---
 
-# Step 29 - Understanding Security Group Changes
+## 11. Understanding Security Group Changes
 
 Fargate networking differs from EC2 node groups.
 
@@ -745,7 +828,7 @@ Because of that, some ports must be explicitly allowed.
 
 ---
 
-# Step 30 - Opening Required Ports
+## 12. Opening Required Ports
 
 Common ports to allow include:
 
@@ -801,7 +884,7 @@ Admission Controllers
 
 ---
 
-# Step 31 - Applying the Changes
+## 13. Applying the Changes
 
 Deploy all modifications.
 
@@ -819,7 +902,7 @@ Cluster Configuration
 
 ---
 
-# Step 32 - Validating the Fargate Cluster
+## 14. Validating the Fargate Cluster
 
 Check running workloads:
 
@@ -831,7 +914,7 @@ Most workloads should now be scheduled on Fargate infrastructure.
 
 ---
 
-# Step 33 - Verifying Node Types
+## 15. Verifying Node Types
 
 Check nodes:
 
@@ -849,7 +932,7 @@ Remember:
 
 ---
 
-# Step 34 - Metrics Server Considerations
+## 16. Metrics Server Considerations
 
 Metrics Server may not behave as expected in a fully Fargate cluster.
 
@@ -863,7 +946,7 @@ Without traditional worker nodes, it may remain unhealthy.
 
 ---
 
-# Step 35 - Deciding Whether to Keep Metrics Server
+## 17. Deciding Whether to Keep Metrics Server
 
 For Fargate-only clusters, consider:
 
@@ -877,7 +960,7 @@ The correct approach depends on your operational requirements.
 
 ---
 
-# Step 36 - Confirming a Fully Fargate Cluster
+## 18. Confirming a Fully Fargate Cluster
 
 At this point:
 
@@ -892,7 +975,7 @@ The cluster is now operating entirely on Fargate.
 
 ---
 
-# Step 37 - Understanding CoreDNS Challenges
+## 19. Understanding CoreDNS Challenges
 
 One common challenge in fully Fargate clusters involves CoreDNS.
 
@@ -908,7 +991,7 @@ This is more common during initial cluster provisioning.
 
 ---
 
-# Step 38 - Historical CoreDNS Limitation
+## 20. Historical CoreDNS Limitation
 
 Older EKS versions could not schedule CoreDNS directly on Fargate.
 
@@ -916,7 +999,7 @@ A workaround was required to move CoreDNS onto Fargate infrastructure.
 
 ---
 
-# Step 39 - Current CoreDNS Behavior
+## 21. Current CoreDNS Behavior
 
 Modern EKS versions support CoreDNS on Fargate.
 
@@ -924,7 +1007,7 @@ However, during cluster bootstrap, CoreDNS may still require intervention to com
 
 ---
 
-# Step 40 - Preparing for the CoreDNS Workaround
+## 22. Preparing for the CoreDNS Workaround
 
 AWS provides a Lambda-based workaround commonly used to restart CoreDNS and force proper scheduling.
 
@@ -932,8 +1015,7 @@ In the next lesson, we will deploy this solution and see how it helps CoreDNS in
 
 ---
 
-# Module 4 - Lesson 4
-## Fixing CoreDNS in Full Fargate Clusters
+# Lesson 4: Fixing CoreDNS in Full Fargate Clusters
 
 In this lesson we will solve one of the most common challenges when building a **fully Fargate-based EKS cluster**.
 
@@ -959,7 +1041,7 @@ Ensure CoreDNS starts correctly on Fargate
 
 ---
 
-# Step 19 - Understanding the CoreDNS Problem
+## 1. Understanding the CoreDNS Problem
 
 In fully Fargate-based clusters, CoreDNS may fail to become healthy during initial provisioning.
 
@@ -975,7 +1057,7 @@ Although newer EKS versions improved this behavior, a rollout restart is still c
 
 ---
 
-# Step 20 - Reviewing the Lambda Code
+## 2. Reviewing the Lambda Code
 
 The course materials include a pre-built Lambda function called:
 
@@ -1097,7 +1179,7 @@ Nothing more.
 
 ---
 
-# Step 21 - Creating the Lambda IAM Role
+## 3. Creating the Lambda IAM Role
 
 Create:
 
@@ -1160,7 +1242,7 @@ Access private cluster resources
 
 ---
 
-# Step 22 - Creating the Lambda Security Group
+## 4. Creating the Lambda Security Group
 
 Next create a Security Group for the Lambda.
 
@@ -1189,7 +1271,7 @@ The Lambda only needs to reach the EKS API endpoint.
 
 ---
 
-# Step 23 - Packaging the Lambda Code
+## 5. Packaging the Lambda Code
 
 Terraform provides a useful provider for packaging files.
 
@@ -1219,7 +1301,7 @@ containing the Lambda source code.
 
 ---
 
-# Step 24 - Initializing Terraform
+## 6. Initializing Terraform
 
 Because we introduced a new provider, run:
 
@@ -1237,7 +1319,7 @@ and make it available to the project.
 
 ---
 
-# Step 25 - Creating the Lambda Function
+## 7. Creating the Lambda Function
 
 Now create the Lambda resource.
 
@@ -1264,7 +1346,7 @@ After a few moments the Lambda should be available.
 
 ---
 
-# Step 26 - Invoking the Lambda Automatically
+## 8. Invoking the Lambda Automatically
 
 Now we want Terraform to execute the Lambda automatically.
 
@@ -1290,7 +1372,7 @@ New Rollout
 
 ---
 
-# Step 27 - Passing Authentication Information
+## 9. Passing Authentication Information
 
 The Lambda needs cluster access.
 
@@ -1305,7 +1387,7 @@ These values allow the Lambda to connect to Kubernetes and execute the rollout.
 
 ---
 
-# Step 28 - Triggering the CoreDNS Rollout
+## 10. Triggering the CoreDNS Rollout
 
 When Terraform invokes the Lambda:
 
@@ -1323,7 +1405,7 @@ This forces Kubernetes to recreate the CoreDNS pods.
 
 ---
 
-# Step 29 - Validating the Rollout
+## 11. Validating the Rollout
 
 You can observe the rollout using:
 
@@ -1342,7 +1424,7 @@ The rollout occurs gradually, avoiding downtime.
 
 ---
 
-# Step 30 - Confirming CoreDNS Health
+## 12. Confirming CoreDNS Health
 
 After the rollout completes, verify:
 
@@ -1360,7 +1442,7 @@ At this point DNS resolution should be functioning normally again.
 
 ---
 
-# Step 31 - Why This Fix Is Useful
+## 13. Why This Fix Is Useful
 
 This approach helps when:
 
@@ -1456,7 +1538,7 @@ The Lambda acts as an automated recovery mechanism.
 
 ---
 
-# Step 32 - Key Takeaways
+## Key Takeaways
 
 In this lesson we:
 
@@ -1473,8 +1555,7 @@ With CoreDNS working correctly, the cluster is now ready for the next step: unde
 
 ---
 
-# Module 4 - Lesson 5
-## Understanding Fargate Capacity and Sizing
+# Lesson 5: Understanding Fargate Capacity and Sizing
 
 In this lesson we will explore how **AWS Fargate allocates CPU and memory** for Kubernetes workloads.
 
@@ -1491,7 +1572,7 @@ This means a small configuration mistake can increase costs significantly.
 
 ---
 
-# Step 33 - Understanding Fargate Capacity Provisioning
+## 1. Understanding Fargate Capacity Provisioning
 
 When a pod runs on Fargate, AWS automatically provisions a dedicated node for that pod.
 
@@ -1513,7 +1594,7 @@ This annotation shows the actual capacity allocated by Fargate.
 
 ---
 
-# Step 34 - Requests and Limits Define the Size
+## 2. Requests and Limits Define the Size
 
 Fargate sizing is determined by the resource requests and limits configured in the pod specification.
 
@@ -1530,7 +1611,7 @@ Based on these values, Fargate selects the closest supported profile.
 
 ---
 
-# Step 35 - Fargate Uses Fixed Capacity Profiles
+## 3. Fargate Uses Fixed Capacity Profiles
 
 Fargate does not allow arbitrary CPU and memory combinations.
 
@@ -1568,7 +1649,7 @@ Fargate always selects one of these supported combinations.
 
 ---
 
-# Step 36 - Understanding Resource Rounding
+## 4. Understanding Resource Rounding
 
 A very important behavior is that Fargate may provision more resources than requested.
 
@@ -1592,7 +1673,7 @@ The allocated capacity can be larger than the requested capacity.
 
 ---
 
-# Step 37 - Testing Larger Resource Requests
+## 5. Testing Larger Resource Requests
 
 Let's increase the pod resources.
 
@@ -1619,7 +1700,7 @@ After redeploying the workload, inspect the pod again.
 
 ---
 
-# Step 38 - Inspecting Provisioned Capacity
+## 6. Inspecting Provisioned Capacity
 
 Run:
 
@@ -1636,17 +1717,15 @@ CapacityProvisioned
 You may notice something similar to:
 
 ```txt
-2 vCPU
-4 GB Memory
+1 vCPU
+2 GB Memory
 ```
 
-Even though the application requested less.
-
-This is normal behavior because Fargate chooses the nearest supported profile.
+This matches exactly what was requested. No rounding happens this time, because `1 vCPU / 2 GB` already matches one of the supported profiles from the table in Section 3 — unlike the rounding example in Section 4.
 
 ---
 
-# Step 39 - Understanding Fargate Billing
+## 7. Understanding Fargate Billing
 
 One of the most important details about Fargate is billing.
 
@@ -1666,24 +1745,24 @@ Example:
 
 ```txt
 Requested:
-1 vCPU
-2 GB RAM
+0.5 vCPU
+0.5 GB RAM
 
 Provisioned:
-2 vCPU
-4 GB RAM
+0.5 vCPU
+1 GB RAM
 ```
 
 Billing will be calculated using:
 
 ```txt
-2 vCPU
-4 GB RAM
+0.5 vCPU
+1 GB RAM
 ```
 
 ---
 
-# Step 40 - Capacity Planning Considerations
+## 8. Capacity Planning Considerations
 
 Because of the sizing model, capacity planning becomes very important.
 
@@ -1700,7 +1779,7 @@ Small adjustments can significantly reduce costs.
 
 ---
 
-# Step 41 - When Fargate Makes Sense
+## 9. When Fargate Makes Sense
 
 Fargate works particularly well for:
 
@@ -1721,7 +1800,7 @@ Simple operations
 
 ---
 
-# Step 42 - Key Takeaways
+## Key Takeaways
 
 In this lesson we learned:
 
