@@ -102,6 +102,31 @@ Karpenter is currently one of the most recommended approaches for scaling EKS cl
   - [17. Applying the Configuration](#17-applying-the-configuration)
   - [18. Benefits of This Approach](#18-benefits-of-this-approach)
   - [19. Preparing for Workload Segregation](#19-preparing-for-workload-segregation)
+- [Lesson 5: Improving Availability with Topology Spread Constraints](#lesson-5-improving-availability-with-topology-spread-constraints)
+  - [1. The Problem: Uneven Distribution](#1-the-problem-uneven-distribution)
+  - [2. Spreading Pods Across Availability Zones](#2-spreading-pods-across-availability-zones)
+  - [3. Diversifying Instance Types and Sizes](#3-diversifying-instance-types-and-sizes)
+  - [4. Mixing Spot and On-Demand Capacity](#4-mixing-spot-and-on-demand-capacity)
+  - [5. Verifying the Distribution](#5-verifying-the-distribution)
+  - [Key Takeaways](#key-takeaways-1)
+- [Lesson 6: Segregating Workloads with Multiple NodePools](#lesson-6-segregating-workloads-with-multiple-nodepools)
+  - [1. Why Segregate Workloads](#1-why-segregate-workloads)
+  - [2. Adding a Dedicated NodePool via Terraform](#2-adding-a-dedicated-nodepool-via-terraform)
+  - [3. Understanding the karpenter.sh/nodepool Label](#3-understanding-the-karpentershnodepool-label)
+  - [4. Targeting a NodePool with nodeSelector](#4-targeting-a-nodepool-with-nodeselector)
+  - [5. Creating Criticality-Based NodePools](#5-creating-criticality-based-nodepools)
+  - [6. Creating OS/AMI-Specific NodePools](#6-creating-osami-specific-nodepools)
+  - [7. Switching Workloads Between NodePools](#7-switching-workloads-between-nodepools)
+  - [Key Takeaways](#key-takeaways-2)
+- [Lesson 7: Native Interruption Handling in Karpenter](#lesson-7-native-interruption-handling-in-karpenter)
+  - [1. How Karpenter Handles Interruptions](#1-how-karpenter-handles-interruptions)
+  - [2. Creating the SQS Queue](#2-creating-the-sqs-queue)
+  - [3. Allowing EventBridge to Publish to the Queue](#3-allowing-eventbridge-to-publish-to-the-queue)
+  - [4. Creating EventBridge Rules for Instance Lifecycle Events](#4-creating-eventbridge-rules-for-instance-lifecycle-events)
+  - [5. Enabling the Interruption Queue](#5-enabling-the-interruption-queue)
+  - [6. Testing Interruption Handling](#6-testing-interruption-handling)
+  - [7. Karpenter vs. the Standalone Node Termination Handler](#7-karpenter-vs-the-standalone-node-termination-handler)
+  - [Key Takeaways](#key-takeaways-3)
 
 ---
 
@@ -586,7 +611,7 @@ Reschedule workloads
 Replace capacity automatically
 ```
 
-> **Note:** the `sqs:*` IAM permission is a prerequisite, not the full mechanism. To actually receive interruption events, Karpenter also needs a dedicated SQS queue plus EventBridge rules forwarding Spot interruption, rebalance-recommendation, and instance state-change notifications to it, along with the `settings.interruptionQueue` Helm value pointing at that queue. None of that infrastructure is created in this lesson, so interruption handling is not yet functional at this point in the course — it's covered by the IAM permission here so it's ready when that queue/EventBridge setup is added.
+> **Note:** the `sqs:*` IAM permission is a prerequisite, not the full mechanism. To actually receive interruption events, Karpenter also needs a dedicated SQS queue plus EventBridge rules forwarding Spot interruption, rebalance-recommendation, and instance state-change notifications to it, along with the `settings.interruptionQueue` Helm value pointing at that queue. None of that infrastructure is created in this lesson, so interruption handling is not yet functional at this point in the course — it's covered by the IAM permission here so it's ready when that queue/EventBridge setup is added in [Lesson 7](#lesson-7-native-interruption-handling-in-karpenter).
 
 ---
 
@@ -1286,33 +1311,6 @@ spec:
         name: chip
         version: v1
     spec:
-
-      # Topology Spread da zona de disponibilidade
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: "topology.kubernetes.io/zone"
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              app: chip
-              
-        # Topology Spread do tipo de instância
-        - maxSkew: 1
-          topologyKey: "node.kubernetes.io/instance-type"
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              app: chip
-              
-        # Topology Spread do tipo de capacity-type
-        - maxSkew: 1
-          topologyKey: "karpenter.sh/capacity-type"
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              app: chip
-
-
       containers:
       - name: chip
         image: fidelissauro/chip:v1
@@ -2073,3 +2071,611 @@ Reduce infrastructure costs
 ```
 
 This is where Karpenter becomes significantly more powerful than traditional node groups and Cluster Autoscaler.
+
+---
+
+# Lesson 5: Improving Availability with Topology Spread Constraints
+
+Now that Karpenter can dynamically create `EC2NodeClasses` and `NodePools`, let's look at the application side: how the `chip` Deployment itself can use Karpenter more intelligently to improve its own availability.
+
+Karpenter always takes the path of least resistance. Left on its own, it provisions capacity whichever way is fastest and cheapest — which often means most replicas end up concentrated in a single Availability Zone, a single instance type, or a single capacity type.
+
+Kubernetes gives us a mechanism to change that: `topologySpreadConstraints`. Karpenter reads these constraints when deciding what capacity to provision, not just where to place pods on nodes that already exist.
+
+In this lesson we will apply three progressively richer spread constraints to the `chip` Deployment and observe how Karpenter reacts to each one.
+
+---
+
+## 1. The Problem: Uneven Distribution
+
+Scale the current `chip` Deployment up significantly:
+
+```bash
+kubectl scale deployment chip --replicas=100 -n chip
+```
+
+Without any further guidance, Karpenter may satisfy this demand unevenly — for example, concentrating most of the new nodes in `us-east-1a` and very few in `us-east-1b` or `us-east-1c`.
+
+Check the zone every node landed in:
+
+```bash
+kubectl get nodes -L topology.kubernetes.io/zone
+```
+
+`topology.kubernetes.io/zone` is a standard Kubernetes well-known label that every cloud provider populates automatically, and it's exactly what we'll use to fix this.
+
+---
+
+## 2. Spreading Pods Across Availability Zones
+
+Add a `topologySpreadConstraints` block to the `chip` Deployment's `spec.template.spec`:
+
+```yaml
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: "topology.kubernetes.io/zone"
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: chip
+      containers:
+      # ...
+```
+
+Each field controls the balancing behavior:
+
+```txt
+maxSkew: the maximum allowed difference between the zone with the most matching pods and the zone with the fewest
+topologyKey: the node label used to group nodes into "zones" for this comparison
+whenUnsatisfiable: ScheduleAnyway lets pods still be scheduled if perfect balance can't be reached, instead of leaving them Pending
+labelSelector: which pods count toward the skew calculation
+```
+
+`ScheduleAnyway` matters here because Karpenter is actively creating capacity to satisfy this constraint — a strict `DoNotSchedule` isn't necessary to get a well-balanced result.
+
+Apply and force the existing capacity to be reconsidered:
+
+```bash
+kubectl apply -f chip.yaml
+kubectl scale deployment chip --replicas=1 -n chip
+kubectl scale deployment chip --replicas=100 -n chip
+```
+
+Check the distribution again:
+
+```bash
+kubectl get nodes -L topology.kubernetes.io/zone
+```
+
+This time the new nodes land in a much more balanced way across the three Availability Zones.
+
+---
+
+## 3. Diversifying Instance Types and Sizes
+
+Back in Lesson 4, our `karpenter_capacity` entry only allowed a single instance family and size:
+
+```hcl
+instance_family = ["t3a"]
+instance_sizes  = ["large"]
+```
+
+Widen both lists so Karpenter has more instance shapes to choose from:
+
+```hcl
+instance_family = ["c6i", "c6a", "c7i", "c7a"]
+instance_sizes  = ["large", "xlarge", "2xlarge"]
+```
+
+Apply the change:
+
+```bash
+terraform apply
+```
+
+Now add a second `topologySpreadConstraint`, this time keyed on the instance type itself:
+
+```yaml
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: "topology.kubernetes.io/zone"
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app: chip
+
+  - maxSkew: 1
+    topologyKey: "node.kubernetes.io/instance-type"
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app: chip
+```
+
+`node.kubernetes.io/instance-type` is another standard well-known label — every node is labeled with its underlying EC2 instance type.
+
+Existing nodes won't retroactively change shape, so force Karpenter to reprovision:
+
+```bash
+kubectl get nodeclaims
+kubectl delete nodeclaim <nodeclaim-name>
+```
+
+---
+
+## 4. Mixing Spot and On-Demand Capacity
+
+The same `karpenter_capacity` entry currently only allows Spot:
+
+```hcl
+capacity_type = ["spot"]
+```
+
+Allow both capacity types:
+
+```hcl
+capacity_type = ["spot", "on-demand"]
+```
+
+Apply the change:
+
+```bash
+terraform apply
+```
+
+Add a third `topologySpreadConstraint`, keyed on Karpenter's own capacity-type label:
+
+```yaml
+  - maxSkew: 1
+    topologyKey: "karpenter.sh/capacity-type"
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app: chip
+```
+
+`karpenter.sh/capacity-type` is set by Karpenter itself on every node it provisions, with a value of either `spot` or `on-demand`.
+
+Delete the current NodeClaims once more to let Karpenter reprovision under the new constraint:
+
+```bash
+kubectl get nodeclaims
+kubectl delete nodeclaim <nodeclaim-name>
+```
+
+---
+
+## 5. Verifying the Distribution
+
+Check all three dimensions at once:
+
+```bash
+kubectl get nodes -L topology.kubernetes.io/zone,node.kubernetes.io/instance-type,karpenter.sh/capacity-type
+```
+
+The `chip` workload should now be spread across multiple AZs, multiple instance types, and a mix of Spot and On-Demand capacity.
+
+The end goal isn't only balance for its own sake — it's Spot safety. AWS interruptions tend to affect a specific instance type in a specific AZ at a time. The more diversified the workload is across zone, instance type, and capacity type, the less likely a single interruption event takes out a large share of the running replicas at once.
+
+---
+
+## Key Takeaways
+
+```txt
+topologySpreadConstraints let the application influence what capacity Karpenter provisions, not just where existing pods are placed
+maxSkew and whenUnsatisfiable control how strict the balancing is
+Multiple constraints can be combined: Availability Zone, instance type, and capacity type
+Diversifying across all three dimensions is what makes running Spot in production safer
+Existing nodes are not retroactively rebalanced — deleting NodeClaims forces Karpenter to reprovision under the new constraints
+```
+
+---
+
+# Lesson 6: Segregating Workloads with Multiple NodePools
+
+With the `karpenter_capacity` list from Lesson 4, we already have the building blocks to run more than one NodePool. In this lesson we use that flexibility to isolate workloads that have different — sometimes conflicting — requirements from the general-purpose pool created so far.
+
+---
+
+## 1. Why Segregate Workloads
+
+Some real-world scenarios can't share a single NodePool:
+
+```txt
+Machine learning workloads that need GPU instance types
+Latency-critical applications that can't tolerate Spot interruption
+Asynchronous or batch workloads that tolerate Spot just fine
+Applications that require a specific AMI family, like Windows or Bottlerocket
+```
+
+With traditional node groups, each of these required its own manually managed Auto Scaling Group. With Karpenter, it's just another entry in `karpenter_capacity`.
+
+---
+
+## 2. Adding a Dedicated NodePool via Terraform
+
+Append a new object to the `karpenter_capacity` list, dedicated to the `chip` workload:
+
+```hcl
+karpenter_capacity = [
+  {
+    name               = "linux-apps"
+    workload           = "linux"
+    ami_family         = "AL2023"
+    ami_ssm            = "/aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/image_id"
+    instance_family    = ["c6i", "c6a", "c7i", "c7a"]
+    instance_sizes     = ["large", "xlarge", "2xlarge"]
+    capacity_type      = ["spot", "on-demand"]
+    availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  },
+  {
+    name               = "chip-capacity"
+    workload           = "chip"
+    ami_family         = "Bottlerocket"
+    ami_ssm            = "/aws/service/bottlerocket/aws-k8s-1.35/x86_64/latest/image_id"
+    instance_family    = ["c6i", "c6a"]
+    instance_sizes     = ["large", "xlarge"]
+    capacity_type      = ["spot"]
+    availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  }
+]
+```
+
+Apply and confirm a second NodePool exists:
+
+```bash
+terraform apply
+kubectl get nodepools
+kubectl get ec2nodeclasses
+```
+
+---
+
+## 3. Understanding the karpenter.sh/nodepool Label
+
+Every node Karpenter provisions is automatically labeled with the name of the NodePool that created it:
+
+```bash
+kubectl get nodes --show-labels | grep karpenter.sh/nodepool
+```
+
+This is the same well-known label used as a `topologySpreadConstraint` key in Lesson 5 — here we'll use it directly as a `nodeSelector` to pin a workload to one specific NodePool.
+
+---
+
+## 4. Targeting a NodePool with nodeSelector
+
+Add a `nodeSelector` to the `chip` Deployment's `spec.template.spec`:
+
+```yaml
+spec:
+  template:
+    spec:
+      nodeSelector:
+        karpenter.sh/nodepool: chip-capacity
+      containers:
+      # ...
+```
+
+Apply the change:
+
+```bash
+kubectl apply -f chip.yaml
+kubectl get nodeclaims
+```
+
+From this point on, Karpenter provisions new capacity for `chip` exclusively from the `chip-capacity` NodePool — the general `linux-apps` pool stops receiving its pods.
+
+---
+
+## 5. Creating Criticality-Based NodePools
+
+The same pattern works for isolating workloads by criticality tier. Add entries for each tier, differing only by `capacity_type`:
+
+```hcl
+{
+  name          = "critical"
+  workload      = "critical"
+  ami_family    = "AL2023"
+  ami_ssm       = "/aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/image_id"
+  instance_family    = ["c6i", "c6a"]
+  instance_sizes     = ["large", "xlarge"]
+  capacity_type      = ["on-demand"]
+  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+},
+{
+  name          = "soft"
+  workload      = "soft"
+  ami_family    = "AL2023"
+  ami_ssm       = "/aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/image_id"
+  instance_family    = ["c6i", "c6a"]
+  instance_sizes     = ["large", "xlarge"]
+  capacity_type      = ["spot"]
+  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+},
+{
+  name          = "general"
+  workload      = "general"
+  ami_family    = "AL2023"
+  ami_ssm       = "/aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/image_id"
+  instance_family    = ["c6i", "c6a"]
+  instance_sizes     = ["large", "xlarge"]
+  capacity_type      = ["spot", "on-demand"]
+  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+}
+```
+
+```txt
+critical: always On-Demand — for workloads that can't tolerate interruption
+soft: always Spot — for workloads that tolerate interruption and want the cost savings
+general: a mix of both — the default for everything else
+```
+
+---
+
+## 6. Creating OS/AMI-Specific NodePools
+
+The same list also isolates workloads that require a specific operating system or AMI family:
+
+```hcl
+{
+  name       = "windows-2019"
+  workload   = "windows-2019"
+  ami_family = "Windows2019"
+  ami_ssm    = "/aws/service/ami-windows-latest/Windows_Server-2019-English-Core-EKS_Optimized-1.35/image_id"
+  instance_family    = ["c6i"]
+  instance_sizes     = ["xlarge"]
+  capacity_type      = ["on-demand"]
+  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+},
+{
+  name       = "windows-2022"
+  workload   = "windows-2022"
+  ami_family = "Windows2022"
+  ami_ssm    = "/aws/service/ami-windows-latest/Windows_Server-2022-English-Core-EKS_Optimized-1.35/image_id"
+  instance_family    = ["c6i"]
+  instance_sizes     = ["xlarge"]
+  capacity_type      = ["on-demand"]
+  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+}
+```
+
+`Windows2019`, `Windows2022`, `AL2`, and `AL2023` are all part of the same `amiFamily` enum we already validated back in Lesson 3 — this is the same list, just applied more deliberately per workload instead of once for the whole cluster.
+
+---
+
+## 7. Switching Workloads Between NodePools
+
+Because targeting a NodePool is just a `nodeSelector`, moving a workload between them only takes a value change:
+
+```yaml
+nodeSelector:
+  karpenter.sh/nodepool: critical
+```
+
+```bash
+kubectl apply -f chip.yaml
+kubectl get nodeclaims -w
+```
+
+Watch the NodeClaims from the old NodePool get decommissioned over time as new ones from the target NodePool take over the workload.
+
+---
+
+## Key Takeaways
+
+```txt
+Every Karpenter-provisioned node carries a karpenter.sh/nodepool label identifying its origin
+A nodeSelector on that label is enough to pin a workload to a specific NodePool
+The same karpenter_capacity Terraform pattern from Lesson 4 scales to dedicated, criticality-based, and OS-specific NodePools
+Moving a workload between NodePools is just a nodeSelector change plus a rollout
+This is where Karpenter clearly surpasses traditional node groups: no manual Auto Scaling Group per workload type
+```
+
+---
+
+# Lesson 7: Native Interruption Handling in Karpenter
+
+Karpenter includes functionality equivalent to a standalone Node Termination Handler: it listens for AWS events about instance lifecycle changes and reacts by draining the affected node and provisioning replacement capacity automatically.
+
+Back in Lesson 2 we granted the Karpenter controller `sqs:*` IAM permissions but noted the interruption-handling infrastructure itself — the actual SQS queue and EventBridge rules — was outside that lesson's scope. This lesson builds that missing piece.
+
+---
+
+## 1. How Karpenter Handles Interruptions
+
+The flow is:
+
+```txt
+AWS publishes an instance lifecycle event (Spot interruption, rebalance recommendation, state-change, health event)
+EventBridge matches the event and forwards it to an SQS queue
+Karpenter polls that queue
+Karpenter cordons and drains the affected node, then provisions replacement capacity
+```
+
+None of this is active yet. Karpenter only starts polling once the Helm chart's `settings.interruptionQueue` value is set — until we do that, the `sqs:*` permission granted in Lesson 2 has had nothing to act on.
+
+---
+
+## 2. Creating the SQS Queue
+
+```hcl
+resource "aws_sqs_queue" "karpenter" {
+  name                       = format("%s-karpenter-interruption", var.project_name)
+  message_retention_seconds  = 86400
+  receive_wait_time_seconds  = 10
+  visibility_timeout_seconds = 60
+}
+```
+
+The retention period has to cover the slowest event type this queue carries, not just the fastest one: Spot interruption warnings give about two minutes of notice, but the scheduled-change health events and ASG lifecycle events added below aren't on that clock. A full day of retention is a safer default than a short window tuned to only one event type. `receive_wait_time_seconds` turns on long polling, so Karpenter isn't hammering SQS between messages, and `visibility_timeout_seconds` gives it a full minute to process a message before it becomes eligible for redelivery.
+
+---
+
+## 3. Allowing EventBridge to Publish to the Queue
+
+```hcl
+data "aws_iam_policy_document" "karpenter_sqs" {
+  statement {
+    effect    = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.karpenter.arn]
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "karpenter" {
+  queue_url = aws_sqs_queue.karpenter.id
+  policy    = data.aws_iam_policy_document.karpenter_sqs.json
+}
+```
+
+Without this policy, EventBridge would not be allowed to deliver messages into the queue.
+
+---
+
+## 4. Creating EventBridge Rules for Instance Lifecycle Events
+
+Define the event patterns Karpenter needs to react to:
+
+```hcl
+locals {
+  karpenter_interruption_events = {
+    instance_terminate = {
+      source      = ["aws.autoscaling"]
+      detail-type = ["EC2 Instance-terminate Lifecycle Action"]
+    }
+    spot_interruption = {
+      source      = ["aws.ec2"]
+      detail-type = ["EC2 Spot Instance Interruption Warning"]
+    }
+    rebalance_recommendation = {
+      source      = ["aws.ec2"]
+      detail-type = ["EC2 Instance Rebalance Recommendation"]
+    }
+    state_change = {
+      source      = ["aws.ec2"]
+      detail-type = ["EC2 Instance State-change Notification"]
+    }
+    health_event = {
+      source      = ["aws.health"]
+      detail-type = ["AWS Health Event"]
+      detail = {
+        service           = ["EC2"]
+        eventTypeCategory = ["scheduledChange"]
+      }
+    }
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "karpenter" {
+  for_each = local.karpenter_interruption_events
+
+  name          = format("%s-karpenter-%s", var.project_name, each.key)
+  event_pattern = jsonencode(each.value)
+}
+
+resource "aws_cloudwatch_event_target" "karpenter" {
+  for_each = local.karpenter_interruption_events
+
+  rule      = aws_cloudwatch_event_rule.karpenter[each.key].name
+  target_id = "karpenter-sqs"
+  arn       = aws_sqs_queue.karpenter.arn
+}
+```
+
+Every one of these rules targets the same SQS queue — Karpenter doesn't care which rule matched, only that a relevant instance lifecycle event arrived.
+
+Two of these are easy to misread:
+
+- `health_event` is scoped with a `detail` block to `service: ["EC2"]` and `eventTypeCategory: ["scheduledChange"]`. Without that filter, the rule would match every AWS Health event across every service in the account, not just EC2 scheduled maintenance.
+- `instance_terminate` listens on `aws.autoscaling`, not `aws.ec2` — it only fires for instances that belong to an Auto Scaling Group with a lifecycle hook, which doesn't include NodePool-provisioned capacity directly. It's part of Karpenter's own reference interruption setup so a cluster that mixes Karpenter with traditional node groups still gets full coverage from one queue.
+
+---
+
+## 5. Enabling the Interruption Queue
+
+Add `settings.interruptionQueue` to the `helm_release` resource created in Lesson 2:
+
+```hcl
+set = [
+  {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.karpenter.arn
+  },
+
+  {
+    name  = "settings.clusterName"
+    value = var.project_name
+  },
+
+  {
+    name  = "settings.clusterEndpoint"
+    value = aws_eks_cluster.main.endpoint
+  },
+
+  {
+    name  = "settings.interruptionQueue"
+    value = aws_sqs_queue.karpenter.name
+  }
+]
+```
+
+Apply the change:
+
+```bash
+terraform apply
+```
+
+This value is passed to the Karpenter controller as the `INTERRUPTION_QUEUE` environment variable — it's the only thing that actually turns interruption handling on.
+
+---
+
+## 6. Testing Interruption Handling
+
+Pick a node and terminate its underlying instance manually:
+
+```bash
+kubectl get nodes
+aws ec2 terminate-instances --instance-ids <instance-id>
+```
+
+Check that a message arrived in the queue:
+
+```bash
+aws sqs receive-message --queue-url <queue-url>
+```
+
+Watch Karpenter react to it:
+
+```bash
+kubectl logs -n karpenter -l app.kubernetes.io/name=karpenter -f
+```
+
+The logs should show the interruption message being captured, the affected node being drained, and a replacement node being provisioned to cover the lost capacity.
+
+---
+
+## 7. Karpenter vs. the Standalone Node Termination Handler
+
+Karpenter's native interruption handling behaves exactly like a standalone Node Termination Handler — cordon, drain, replace. Because of that, AWS does not recommend running both at the same time: they would both attempt to react to the same events and could interfere with each other's draining.
+
+If Karpenter manages the cluster's capacity, its native interruption handling should be the only one enabled.
+
+---
+
+## Key Takeaways
+
+```txt
+Karpenter's interruption handling stays dormant until settings.interruptionQueue is set — the sqs:* permission from Lesson 2 alone is not enough
+The pipeline is: EventBridge rules match instance lifecycle events, forward them to an SQS queue, Karpenter polls that queue
+The queue's retention has to cover the slowest event type it carries — Spot warnings give two minutes of notice, but scheduled-change and ASG lifecycle events don't, which is why the queue keeps messages for a full day
+Never run the standalone Node Termination Handler alongside Karpenter's native handling
+```
