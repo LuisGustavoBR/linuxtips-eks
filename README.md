@@ -97,15 +97,13 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Fixing depends_on references after node group removal
 - Deploying workloads without a Node Selector
 
-### Module 07 - AWS Load Balancer Controller
+### [Module 07 - AWS Load Balancer Controller](./07%20-%20AWS%20Load%20Balancer%20Controller/README.md)
 
-- IAM setup and installation
-- Network Load Balancers
-- Ingress Class
-- HTTPS with ACM
-- External Load Balancer
-- Target Group Binding
-- Observability session
+- IAM setup (IRSA) and Helm installation
+- Network Load Balancer via Service annotations
+- Application Load Balancer via Ingress and host-based routing
+- HTTPS with ACM and DNS validation
+- Target Group Binding for Kubernetes-decoupled load balancers
 
 ### Module 08 - NGINX Ingress Controller
 
