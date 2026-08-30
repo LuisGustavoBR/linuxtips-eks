@@ -48,6 +48,8 @@ The reused setup still carries the IAM caveat flagged in Module 7: `iam_aws_load
 
 ## 2. The Shared NLB Architecture
 
+![NGINX Architecture](nginx-architecture.png)
+
 Every load balancer built in Module 7 was one-to-one: one Service or Ingress, one AWS load balancer. That doesn't scale well once a cluster hosts more than a handful of services — each one would mean its own NLB or ALB, its own listener rules, its own bill.
 
 This module's architecture instead shares a single Network Load Balancer across the entire cluster:
