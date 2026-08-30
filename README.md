@@ -105,13 +105,13 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - HTTPS with ACM and DNS validation
 - Target Group Binding for Kubernetes-decoupled load balancers
 
-### Module 08 - NGINX Ingress Controller
+### [Module 08 - NGINX Ingress Controller](./08%20-%20NGINX%20Ingress%20Controller/README.md)
 
-- Introduction
-- Production hardening
-- Capacity and autoscaling
-- Target Group Binding
-- Multi-service deployments
+- Shared NLB architecture with Target Group Binding
+- Installing NGINX Ingress Controller with Helm
+- Capacity and autoscaling for the Ingress Controller
+- Parametrizing Helm values and Deployment vs DaemonSet
+- Routing multiple services through one shared Ingress Controller
 
 ### Module 09 - Storage in EKS
 
