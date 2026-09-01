@@ -113,16 +113,14 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Parametrizing Helm values and Deployment vs DaemonSet
 - Routing multiple services through one shared Ingress Controller
 
-### Module 09 - Storage in EKS
+### [Module 09 - Storage in EKS](./09%20-%20Storage%20in%20EKS/README.md)
 
-- CSI drivers overview
-- Pod Identity
-- EBS CSI
-- VolumeClaimTemplates
+- CSI drivers overview and Pod Identity as an alternative to IRSA
+- EBS CSI driver installation and static PVC provisioning
+- Dynamic provisioning with StatefulSets and volumeClaimTemplates
 - GP3 StorageClasses
-- EFS CSI
-- Shared volumes
-- S3 CSI driver
+- EFS CSI driver installation and shared, multi-pod volumes
+- S3 CSI driver installation and mounting a bucket as a volume
 
 ### Module 10 - External Secrets
 
