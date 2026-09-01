@@ -122,14 +122,13 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - EFS CSI driver installation and shared, multi-pod volumes
 - S3 CSI driver installation and mounting a bucket as a volume
 
-### Module 10 - External Secrets
+### [Module 10 - External Secrets](./10%20-%20External%20Secrets/README.md)
 
-- Introduction
-- Installation
-- AWS Secrets Manager integration
-- JSON multi-value secrets
+- External Secrets Operator overview and Pod Identity setup
+- IAM setup and installation via Helm
+- SecretStore and ExternalSecret CRDs, wired into a Deployment
+- AWS Secrets Manager integration, including JSON multi-value secrets
 - AWS Parameter Store integration
-- Service Mesh session
 
 ### Module 11 - EKS Auto Mode
 
