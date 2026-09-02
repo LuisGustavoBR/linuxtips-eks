@@ -130,13 +130,13 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - AWS Secrets Manager integration, including JSON multi-value secrets
 - AWS Parameter Store integration
 
-### Module 11 - EKS Auto Mode
+### [Module 11 - EKS Auto Mode](./11%20-%20EKS%20Auto%20Mode/README.md)
 
-- Introduction
-- Automode deployment
-- NodePools in Automode
-- System workload segregation
-- Load Balancer integration
+- EKS Auto Mode overview: what it manages, node lifecycle, pros and cons
+- Enabling Auto Mode: cluster IAM permissions and the `aws_eks_cluster` config
+- First deployment and the built-in `general-purpose`/`system` NodePools
+- Scheduling system components onto the `system` NodePool
+- Ingress and Load Balancer integration on Auto Mode
 
 ### Module 12 - Observability with Prometheus and Grafana
 
