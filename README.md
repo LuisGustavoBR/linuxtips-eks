@@ -138,16 +138,14 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Scheduling system components onto the `system` NodePool
 - Ingress and Load Balancer integration on Auto Mode
 
-### Module 12 - Observability with Prometheus and Grafana
+### [Module 12 - Observability with Prometheus and Grafana](./12%20-%20Observability%20with%20Prometheus%20and%20Grafana/README.md)
 
-- kube-prometheus-stack
-- Installation with Karpenter
-- Prometheus deployment
-- Grafana exposure with NGINX
-- ServiceMonitors
-- EFS persistence
-- Retention tuning
-- EKS upgrades
+- Introduction to the kube-prometheus-stack umbrella Helm chart and its components
+- Preparing the cluster: Pod Identity, EFS CSI, and a temporary CoreDNS/Karpenter workaround
+- Installing Prometheus and exposing Grafana behind an NGINX Ingress
+- Scraping real metrics with ServiceMonitors and importing Grafana Labs dashboards
+- Persisting Prometheus and Grafana data on EFS so pod restarts don't lose it
+- Segregating capacity onto a dedicated Karpenter NodePool and tuning metric retention
 
 ### Module 13 - Service Mesh with Istio
 
