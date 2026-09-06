@@ -159,15 +159,15 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Resilience with VirtualService retries and DestinationRule circuit breaking
 - Mapping external, out-of-mesh traffic with a ServiceEntry
 
-### Module 14 - Event-Driven Autoscaling with KEDA
+### [Module 14 - Event-Driven Autoscaling with KEDA](./14%20-%20Event-Driven%20Autoscaling%20with%20KEDA/README.md)
 
-- Introduction
-- Helm installation
-- CPU autoscaling
-- Cron scaling
-- Prometheus TPS scaling
-- SQS consumer scaling
-- Fargate integration
+- What KEDA adds beyond Karpenter's node-level autoscaling, and its scaler ecosystem
+- Installing KEDA with Pod Identity and a Terraform helm_release
+- Scaling on CPU usage with a ScaledObject and its underlying HPA
+- Scaling on a schedule with a cron trigger
+- Scaling on requests per second with a Prometheus trigger and k6 load testing
+- Scaling an SQS consumer into DynamoDB with a TriggerAuthentication and ServiceEntry mapping
+- Running KEDA itself on a dedicated Fargate profile
 
 ### Module 15 - Progressive Delivery with Argo Rollouts
 
