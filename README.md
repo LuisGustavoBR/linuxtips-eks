@@ -147,17 +147,17 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Persisting Prometheus and Grafana data on EFS so pod restarts don't lose it
 - Segregating capacity onto a dedicated Karpenter NodePool and tuning metric retention
 
-### Module 13 - Service Mesh with Istio
+### [Module 13 - Service Mesh with Istio](./13%20-%20Service%20Mesh%20with%20Istio/README.md)
 
-- Introduction
-- Helm installation
-- Ingress Gateway production setup
-- Lab deployments
-- Prometheus monitors
-- Jaeger tracing
-- Kiali integration
-- Resilience strategies
-- External service mapping
+- Introduction to service meshes, the Envoy sidecar pattern, and mTLS
+- Retiring NGINX and installing Istio's base, control plane, and ingress gateway charts with Helm
+- Productionizing the Ingress Gateway: NodePort exposure, autoscaling, and binding it to the existing NLB
+- Deploying a multi-service lab application with automatic sidecar injection
+- Migrating Grafana onto the Istio Gateway and scraping every Envoy sidecar with a PodMonitor
+- Distributed tracing with Jaeger, wired into istiod's mesh-wide auto-tracing
+- Installing Kiali and integrating it with Jaeger, Prometheus, and Grafana
+- Resilience with VirtualService retries and DestinationRule circuit breaking
+- Mapping external, out-of-mesh traffic with a ServiceEntry
 
 ### Module 14 - Event-Driven Autoscaling with KEDA
 
