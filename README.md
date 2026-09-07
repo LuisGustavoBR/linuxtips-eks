@@ -169,16 +169,15 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Scaling an SQS consumer into DynamoDB with a TriggerAuthentication and ServiceEntry mapping
 - Running KEDA itself on a dedicated Fargate profile
 
-### Module 15 - Progressive Delivery with Argo Rollouts
+### [Module 15 - Progressive Delivery with Argo Rollouts](./15%20-%20Progressive%20Delivery%20with%20Argo%20Rollouts/README.md)
 
-- Introduction
-- Helm installation
-- Canary releases
-- Manual and timed progression
-- Metric-based promotion (Prometheus)
-- Blue-Green deployments
-- Warm-up strategies
-- Fargate integration
+- From Deployment to the Rollout CRD, and installing Argo Rollouts with a Terraform helm_release
+- Exposing the Argo Rollouts dashboard through Istio
+- Manual, time-based, and metric-driven canary promotion with AnalysisTemplates
+- Blue-Green deployments: manual and automatic promotion, scaleDownDelaySeconds
+- Warming up pods pre-promotion with a containerized k6 load test and a job-based AnalysisTemplate
+- Metric-based pre-promotion analysis against the preview service
+- Running Argo Rollouts itself on a dedicated Fargate profile
 
 ### Module 16 - Helm Advanced Usage
 
