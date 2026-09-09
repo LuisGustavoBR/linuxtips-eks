@@ -179,17 +179,14 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Metric-based pre-promotion analysis against the preview service
 - Running Argo Rollouts itself on a dedicated Fargate profile
 
-### Module 16 - Helm Advanced Usage
+### [Module 16 - Helm Advanced Usage](./16%20-%20Helm%20Advanced%20Usage/README.md)
 
-- Helmify
-- Feature toggles
-- Services
-- Rollouts integration
-- TopologySpread
-- Istio integration
-- AnalysisTemplates
-- KEDA triggers
-- Packaging charts
+- Packaging every platform capability built so far (Rollouts, Istio, KEDA) into one reusable Helm chart
+- Building the chart from scratch, resource by resource, against `helm create` and Helmfy reference scaffolds
+- Feature-toggled Namespace, Gateway, VirtualService, ServiceMonitor, and KEDA `ScaledObject`
+- A canary-only Rollout template with configurable steps, probes, capacity, and topology spread
+- Parameterized `AnalysisTemplate`s and five templated KEDA trigger types (Prometheus, cron, memory, CPU, SQS)
+- Packaging the finished chart with `helm package` for the next module's Argo CD hand-off
 
 ### Module 17 - GitOps with ArgoCD
 
