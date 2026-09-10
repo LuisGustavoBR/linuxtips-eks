@@ -188,15 +188,14 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Parameterized `AnalysisTemplate`s and five templated KEDA trigger types (Prometheus, cron, memory, CPU, SQS)
 - Packaging the finished chart with `helm package` for the next module's Argo CD hand-off
 
-### Module 17 - GitOps with ArgoCD
+### [Module 17 - GitOps with ArgoCD](./17%20-%20GitOps%20with%20ArgoCD/README.md)
 
-- Introduction to ArgoCD and ChartMuseum
-- ChartMuseum setup
-- ArgoCD installation
-- Dashboard exposure
-- ApplicationSets
-- Projects
-- Argo Rollouts integration
+- GitOps concepts, Application vs. ApplicationSet, and why ApplicationSets are used from day one
+- Deploying ChartMuseum as an internal, S3-backed Helm chart registry via Pod Identity
+- Installing Argo CD and exposing its dashboard through an Istio Gateway/VirtualService
+- Deploying the `chip` canary as an ApplicationSet sourced directly from ChartMuseum
+- AppProjects and a six-service "nutrition" health-API lab for context segregation
+- The community Rollout Extension, promoting canaries from inside the Argo CD dashboard
 
 ### Module 18 - Final Project — ArgoCD Multicluster Architecture
 
