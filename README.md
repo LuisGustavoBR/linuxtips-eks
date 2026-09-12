@@ -197,17 +197,14 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - AppProjects and a six-service "nutrition" health-API lab for context segregation
 - The community Rollout Extension, promoting canaries from inside the Argo CD dashboard
 
-### Module 18 - Final Project — ArgoCD Multicluster Architecture
+### [Module 18 - ArgoCD Multicluster Architecture](./18%20-%20ArgoCD%20Multicluster%20Architecture/README.md)
 
-- Multicluster foundation
-- Shared Load Balancer (Active-Active)
-- HTTPS with ACM
-- Parameter Store
-- Multiple EKS clusters
-- Multicluster IAM authorization
-- ApplicationSets for components
-- ApplicationSets for workloads
-- ChartMuseum integration
+- Bootstrapping a new three-stack repo: shared `ingress`, reusable `clusters`, and a dedicated `control-plane` GitOps cluster
+- A shared ALB with weighted active-active routing between two workload clusters, plus optional HTTPS via ACM
+- Provisioning both workload clusters (Karpenter, AWS Load Balancer Controller, Istio) with EKS Pod Identity throughout
+- Federating clusters into Argo CD via a two-role IAM chain and per-cluster EKS access entries
+- Managing shared add-ons (Argo Rollouts, Metrics Server, KEDA) as multicluster `ApplicationSet`s
+- Deploying the `chip` canary active-active across both clusters, with independent per-cluster rollouts and ALB-based failover
 
 ### Module 19 - Final Project — Observability with Grafana Loki
 
