@@ -206,15 +206,15 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Managing shared add-ons (Argo Rollouts, Metrics Server, KEDA) as multicluster `ApplicationSet`s
 - Deploying the `chip` canary active-active across both clusters, with independent per-cluster rollouts and ALB-based failover
 
-### Module 19 - Final Project — Observability with Grafana Loki
+### [Module 19 - Observability with Grafana Loki](./19%20-%20Observability%20with%20Grafana%20Loki/README.md)
 
-- Introduction to Loki
-- Observability cluster foundation
-- Grafana dashboards
-- Loki setup
-- Network Load Balancer exposure
-- Fluent Bit log shipping
-- Capacity segregation
+- Bootstrapping a fourth, dedicated observability cluster by copying Module 18's control-plane stack
+- Grafana with EFS-backed dashboard persistence, exposed through an internet-facing ALB
+- Grafana Loki in simple-scalable mode, backed by S3 chunks and a GP3-backed write/backend path
+- An internal NLB and private Route 53 zone exposing the Loki gateway inside the VPC
+- Wiring Loki as a Grafana data source and querying logs with LogQL
+- Shipping logs from both workload clusters into Loki with a multicluster Fluent Bit `ApplicationSet`
+- Dedicated Karpenter NodePools per observability workload (`grafana`, `loki`)
 
 ### Module 20 - Final Project — Distributed Tracing with Grafana Tempo
 
