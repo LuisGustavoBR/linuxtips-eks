@@ -216,20 +216,15 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Shipping logs from both workload clusters into Loki with a multicluster Fluent Bit `ApplicationSet`
 - Dedicated Karpenter NodePools per observability workload (`grafana`, `loki`)
 
-### Module 20 - Final Project — Distributed Tracing with Grafana Tempo
+### [Module 20 - Distributed Tracing with Grafana Tempo](./20%20-%20Distributed%20Tracing%20with%20Grafana%20Tempo/README.md)
 
-- Introduction to Grafana Tempo
-- Setup and Installation of Grafana Tempo
-- Tempo Exposure
-- Grafana Datasource Configuration
-- OpenTelemetry Collector Setup for Trace Collection
-- Health API Lab Deployment
-- ArgoCD integration for OpenTelemetry
-- Helm deployment for Tempo
-- IAM and Pod Identity configuration
-- Load Balancer and Target Group Binding
-- S3 backend configuration for Tempo
-- Route53 integration
+- Grafana Tempo, deployed via the `tempo-distributed` Helm chart into the same observability cluster built in Module 19
+- A dedicated S3 bucket, IAM Pod Identity role, and Karpenter NodePool for Tempo
+- An internal NLB and private Route 53 record exposing the Tempo gateway inside the VPC
+- Wiring Tempo as a Grafana data source, correlated with the existing Loki data source
+- A multicluster OpenTelemetry Collector `ApplicationSet`, activated for real via Terraform on the control-plane cluster
+- Deploying a large multi-service "Health API" lab, instrumented to send Zipkin-format traces through the collector into Tempo
+- Exploring end-to-end distributed traces and adding a Tempo panel to the Module 19 Grafana dashboard
 
 ### Module 21 - Final Project — Centralized Metrics with Grafana Mimir
 
