@@ -226,21 +226,16 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Deploying a large multi-service "Health API" lab, instrumented to send Zipkin-format traces through the collector into Tempo
 - Exploring end-to-end distributed traces and adding a Tempo panel to the Module 19 Grafana dashboard
 
-### Module 21 - Final Project — Centralized Metrics with Grafana Mimir
+### [Module 21 - Centralized Metrics with Grafana Mimir](./21%20-%20Centralized%20Metrics%20with%20Grafana%20Mimir/README.md)
 
-- Introduction to Grafana Mimir
-- Initial Setup
-- Grafana Mimir Installation
-- Mimir Exposure
-- Datasource Configuration
-- Prometheus Server installation across clusters
-- Prometheus scrape configs
-- Remote Write from Prometheus to Grafana Mimir
-- ArgoCD integration (standard, complete and remote write setups)
-- IAM and Pod Identity configuration
-- S3 backend configuration for Mimir
-- Load Balancer and Route53 integration
-- Target Group Binding
+- Grafana Mimir, the fourth and most complex Grafana Stack component, deployed via the `mimir-distributed` Helm chart into the same observability cluster built in Modules 19-20
+- Two dedicated S3 buckets, two Pod Identity associations, and a dedicated Karpenter NodePool for Mimir
+- Mimir's many components at a glance: compactor, distributor, ingester, four caches, querier, query-frontend, ruler, and store-gateway
+- Exposing Mimir through an internal Application Load Balancer — the one exception to this cluster's NLB exposure pattern
+- Wiring Mimir as a `prometheus`-type Grafana data source
+- Deploying a lightweight, stateless Prometheus server to each workload cluster via a multicluster `ApplicationSet`, activated for real via Terraform on the control-plane cluster
+- Remote-writing metrics from each cluster's Prometheus into Mimir, tagged with a `cluster` external label for cross-cluster correlation
+- Bringing traces (Tempo), logs (Loki), and metrics (Mimir) together in one Grafana dashboard
 
 ### Module 22 - Final Project — Observability Correlation (Metrics, Logs and Traces)
 
