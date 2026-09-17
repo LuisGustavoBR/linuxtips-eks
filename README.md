@@ -237,17 +237,14 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Remote-writing metrics from each cluster's Prometheus into Mimir, tagged with a `cluster` external label for cross-cluster correlation
 - Bringing traces (Tempo), logs (Loki), and metrics (Mimir) together in one Grafana dashboard
 
-### Module 22 - Final Project — Observability Correlation (Metrics, Logs and Traces)
+### [Module 22 - Observability Correlation (Metrics, Logs and Traces)](./22%20-%20Observability%20Correlation%20%28Metrics%2C%20Logs%20and%20Traces%29/README.md)
 
-- Introduction to Datasources
-- Metrics and Traces correlation (Service Maps with Tempo)
-- Logs and Traces correlation (Loki and Tempo)
-- Integrated Dashboard (Metrics x Logs x Traces)
-- Metrics Generator configuration
-- Loki configuration
-- Tempo configuration
-- Full Terraform locals setup
-- Example dashboard JSON configuration
+- Tying together the three pillars built in Modules 19-21 — Loki, Tempo, and Mimir — into one correlated Grafana experience, with no new infrastructure
+- Enabling Tempo's metrics generator to derive service-graph and span metrics from trace data, remote-written into Mimir
+- Wiring the `Tempo` datasource's `serviceMap`/`nodeGraph`/`tracesToMetrics` fields for a live, interactive service map
+- Correlating logs and traces both ways via Loki's derived fields and an application-logged trace ID
+- Building a dashboard that combines a service graph, an outlier-traces table, application logs, and RED-method (Rate, Errors, Duration) metrics from Istio
+- Demonstrating the "single pane of glass" payoff: narrowing a metric anomaly down to the exact trace and failing downstream call
 
 ### Module 23 - Chaos Engineering with Chaos Mesh
 
