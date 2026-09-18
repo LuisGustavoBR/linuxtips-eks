@@ -26,6 +26,15 @@ This repository follows a modular structure covering:
 
 Everything is built using Infrastructure as Code and production best practices.
 
+## Related Repositories
+
+This repository holds the course notes and per-module READMEs only. The actual Terraform/Helm/Kubernetes code behind each module lives in one of the following companion repositories, linked from the modules that use them:
+
+- **[linuxtips-eks-networking](https://github.com/LuisGustavoBR/linuxtips-eks-networking)** — the VPC/networking foundation (Module 1): CIDR association, public/private/pod subnets, NAT Gateways, database NACLs, and SSM Parameter Store integration.
+- **[linuxtips-eks-vanilla](https://github.com/LuisGustavoBR/linuxtips-eks-vanilla)** — the course's main "final project" cluster (Modules 2-17, plus the Module 23 bonus lesson). One long-lived codebase, with most lesson topics built on their own `lesson/*` branch (e.g. `lesson/node-groups`, `lesson/karpenter`, `lesson/istio`, `lesson/argocd`, `lesson/chaos-mesh`) before merging forward, covering everything from the control plane and node groups through Karpenter, Istio, KEDA, Argo Rollouts, Helm, ArgoCD, and Chaos Mesh.
+- **[linuxtips-eks-multicluster-management](https://github.com/LuisGustavoBR/linuxtips-eks-multicluster-management)** — a separate, brand-new codebase for the multicluster architecture built in Module 18: a shared ingress/ALB stack, two workload EKS clusters, and a dedicated Argo CD control-plane cluster federating both via cross-cluster IAM and Terraform-managed `ApplicationSet`s.
+- **[linuxtips-eks-observability-cluster](https://github.com/LuisGustavoBR/linuxtips-eks-observability-cluster)** — a fourth, dedicated EKS cluster built purely for the observability stack in Modules 19-22: Grafana, Loki (logs), Tempo (traces), and Mimir (metrics), plus the cross-pillar correlation dashboards that tie them together.
+
 ## Table of Contents
 
 The repository is organized into modules, each focused on a specific EKS topic.
@@ -246,21 +255,14 @@ The repository is organized into modules, each focused on a specific EKS topic.
 - Building a dashboard that combines a service graph, an outlier-traces table, application logs, and RED-method (Rate, Errors, Duration) metrics from Istio
 - Demonstrating the "single pane of glass" payoff: narrowing a metric anomaly down to the exact trace and failing downstream call
 
-### Module 23 - Chaos Engineering with Chaos Mesh
+### [Module 23 - Chaos Engineering with Chaos Mesh](./23%20-%20Chaos%20Engineering%20with%20Chaos%20Mesh/README.md)
 
-- Introduction to Chaos Mesh
-- Installation of Chaos Mesh
-- Pod Kill and Pod Failure tests
-- Network Delay, Partition and Bandwidth tests
-- CPU Stress and Memory Stress tests
-- DNS Error and DNS Random IP tests
-- Chaos Mesh Dashboards
-- Chaos Workflows
-- Scheduling Chaos Experiments
-- Helm deployment of Chaos Mesh
-- Exposure configuration
-- Lab deployment for chaos testing
-- Variables and infrastructure setup
+- Installing Chaos Mesh via Helm, with a Bottlerocket-specific containerd socket customization
+- `PodChaos` experiments: killing pods (one, all, or a fixed/random percentage) versus failing their health checks in place
+- `NetworkChaos` experiments: injecting delay, partitioning traffic between two pod groups, and throttling bandwidth
+- `StressChaos` and `DNSChaos` experiments: spiking CPU/memory, and forcing DNS resolution errors or bad IP responses
+- Exposing the Chaos Mesh dashboard on demand via Istio, gated behind an RBAC token
+- Orchestrating multiple experiments with serial/parallel Workflows and recurring cron-based Schedules
 
 ## Usage
 
